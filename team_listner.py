@@ -1,15 +1,8 @@
 import sys
 from pymavlink import mavutil
 
-# ==========================================
-# TEAM CONFIGURATION - CHANGE THIS PORT!
-# M3 (Detection Engine) : 14551
-# M4 (Attack Injector)  : 14552
-# M5 (Custom Feed)      : 69 
-# ==========================================
 PORT = 14551 
 
-# Bind to all network interfaces (0.0.0.0) so it can catch M1's broadcast
 connection_string = f'udpin:0.0.0.0:{PORT}'
 
 print(f"GarudaShield Live Sync: Listening on port {PORT}...")

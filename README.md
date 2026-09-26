@@ -76,11 +76,7 @@ bash
 Ubuntu 22.04+ / macOS / WSL2
 Python 3.10+
 
-
-### Installation
-# Clone
-git clone https://github.com/SoumyaAg16/m3.git
-cd m3/m3_detection
+# Installation
 
 # Virtual environment
 uv venv --python 3.10
@@ -88,16 +84,6 @@ source .venv/bin/activate
 
 # Dependencies
 uv pip install pandas numpy scikit-learn joblib pymavlink filterpy scipy cryptography
-
-### Attack coverage:
-
-Attack	        Feature Triggered
-GPS Spoofing	gps_jump, gps_cumulative_drift
-GPS Jamming	packet_loss_rate, timestamp_max_gap
-GPS Freeze	motion_consistency
-Control Hijack	heading_change, vz_jump
-Altitude Spoof	altitude_drift, altitude_velocity_mismatch
-
 
 <div align="center">
 ⭐ Star this repo if it helped you!

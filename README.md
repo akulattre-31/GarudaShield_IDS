@@ -10,7 +10,7 @@
 
 **Onboard cyber defence for UAVs — real-time, multi-layer, signed, and adaptive.**
 
-[Overview](#-overview) • [Architecture](#-architecture) • [Features](#-features) • [Quick Start](#-quick-start) • [Detection Layers](#-detection-layers) • [Security](#-security-model) • [Performance](#-performance)
+[Overview](#-overview) • [Features](#-features) • [Quick Start](#-quick-start)
 
 </div>
 

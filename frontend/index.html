@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PUSHPAK-IDS: Advanced Avionics</title>
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Subtle CRT Effect -->
+    <div class="scanlines"></div>
+
+    <div class="hud-container">
+        <!-- Avionics Status Banner -->
+        <div id="status-banner" class="header safe">
+            <div class="header-left">
+                <i class="fa-solid fa-shield-halved" id="status-icon"></i>
+            </div>
+            <div class="header-center" id="status-text">
+                SYS.TRACKING // AIRSPACE SECURE // PUSHPAK IDS ACTIVE
+            </div>
+            <div class="header-right">
+                <span class="live-indicator">●</span> LIVE
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <!-- Left Column: Telemetry & Threat Matrix -->
+            <div class="left-col">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="flex-between">
+                            <span><i class="fa-solid fa-gauge-high"></i> CORE TELEMETRY</span>
+                        </div>
+                    </div>
+                    <div class="telemetry-grid">
+                        <div class="tel-item gauge-item">
+                            <div class="tel-label">ALT (MSL)</div>
+                            <div class="gauge-container">
+                                <svg class="circular-chart" viewBox="0 0 36 36">
+                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path class="circle" id="alt-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                </svg>
+                                <div class="percentage" id="alt-val">0.00m</div>
+                            </div>
+                        </div>
+                        <div class="tel-item gauge-item">
+                            <div class="tel-label">VEL (GND)</div>
+                            <div class="gauge-container">
+                                <svg class="circular-chart" viewBox="0 0 36 36">
+                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path class="circle" id="spd-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                </svg>
+                                <div class="percentage" id="spd-val">0.00m/s</div>
+                            </div>
+                        </div>
+                        <!-- Pitch and Roll removed as they do not apply without IMU data -->
+                        <div class="tel-item gauge-item">
+                            <div class="tel-label">CPU LOAD</div>
+                            <div class="gauge-container">
+                                <svg class="circular-chart" viewBox="0 0 36 36">
+                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path class="circle" id="cpu-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                </svg>
+                                <div class="percentage" id="cpu-val-text">0%</div>
+                            </div>
+                        </div>
+                        <div class="tel-item gauge-item">
+                            <div class="tel-label">RAM LOAD</div>
+                            <div class="gauge-container">
+                                <svg class="circular-chart" viewBox="0 0 36 36">
+                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path class="circle" id="ram-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                </svg>
+                                <div class="percentage" id="ram-val-text">0%</div>
+                            </div>
+                        </div>
+                        <div class="tel-item" style="grid-column: span 2;">
+                            <div class="tel-label">LINK PING</div>
+                            <div class="tel-value"><span id="lat-val">0</span><span class="unit">ms</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="flex-between">
+                            <span><i class="fa-solid fa-radar"></i> THREAT MATRIX</span>
+                        </div>
+                    </div>
+                    <div class="threat-matrix">
+                        <div class="threat-item" id="threat-gps">
+                            <div class="threat-led"></div>
+                            <div class="threat-name">GPS KINEMATIC SPOOF</div>
+                        </div>
+                        <div class="threat-item" id="threat-dos">
+                            <div class="threat-led"></div>
+                            <div class="threat-name">MAVLINK RATE FLOOD</div>
+                        </div>
+                        <div class="threat-item" id="threat-cmd">
+                            <div class="threat-led"></div>
+                            <div class="threat-name">UNAUTH COMMAND INJ.</div>
+                        </div>
+                        <div class="threat-item" id="threat-rpl">
+                            <div class="threat-led"></div>
+                            <div class="threat-name">ZERO DAY / PAYLOAD ANOMALY</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="flex-between">
+                            <span><i class="fa-solid fa-triangle-exclamation"></i> MANUAL OVERRIDE</span>
+                        </div>
+                    </div>
+                    <div class="override-controls">
+                        <button class="btn-override btn-brake"><i class="fa-solid fa-hand"></i> FORCE BRAKE</button>
+                        <button class="btn-override btn-rtl"><i class="fa-solid fa-house-medical-flag"></i> FORCE RTL</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Column: Tactical Map & Math -->
+            <div class="center-col">
+                <div class="panel map-panel">
+                    <div class="panel-header">
+                        <div class="flex-between">
+                            <span><i class="fa-solid fa-map-location-dot"></i> TACTICAL AIRSPACE MAP</span>
+                        </div>
+                    </div>
+                    <div id="tactical-map"></div>
+                    <div class="map-overlay">
+                        <div class="coord-display">LAT: <span id="lat-display">0.000000</span></div>
+                        <div class="coord-display">LON: <span id="lon-display">0.000000</span></div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="flex-between">
+                            <span><i class="fa-solid fa-wave-square"></i> GPS TAMPER SENSOR (KINEMATIC RESIDUAL)</span>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="residualChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Ledger (Bottom) -->
+        <div class="panel ledger-panel">
+            <div class="panel-header flex-between">
+                <div><i class="fa-solid fa-list-check"></i> AUTONOMOUS INCIDENT LOG [SHA-256 SECURED]</div>
+                <button id="export-btn" class="export-btn"><i class="fa-solid fa-download"></i> DUMP FORENSICS</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>REPORT #</th>
+                            <th>T-STAMP</th>
+                            <th>THREAT VECTOR</th>
+                            <th>SYSTEM OVERRIDE / MITIGATION</th>
+                            <th>SECURE HASH (EVIDENCE)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledger-body">
+                        <!-- Rows injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# Python Bytecode & Cache
+__pycache__/
+*.pyc
+
+# Virtual Environments
+.venv/
+venv/
+
+# Security & Keys (NEVER COMMIT)
+keys/
+*.pem
+*.key
+.env
+
+# Heavy Data & Model Weights
+data/
+models/
+*.pt
+*.pth
+*.onnx
+
+# Logs
+logs/
+*.log
+
+# IDE & System Files
+.DS_Store
+.vscode/
+.idea/

@@ -1,34 +1,533 @@
-/* Sleek, minimal overriding styles for Garudakaavach */
+/* ══════════════════════════════════════════════════════════════════
+   GARUDA KAVACH — DEFENSE-GRADE DRONE IDS DASHBOARD
+   Liquid Glassmorphism Design System & Cybernetic Aerospace Styles
+   ══════════════════════════════════════════════════════════════════ */
 
-/* Just keeping minimal custom CSS in case the app breaks without it */
-body {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@600;700;800&display=swap');
+
+:root {
+    --brand-bg: #040813;
+    --brand-surface: rgba(10, 18, 38, 0.72);
+    --brand-card: rgba(13, 23, 48, 0.62);
+    --brand-card-hover: rgba(18, 32, 64, 0.78);
+    --brand-border: rgba(0, 240, 255, 0.16);
+    --brand-border-glow: rgba(0, 240, 255, 0.45);
+    --brand-accent: #00f0ff;
+    --brand-accent-glow: rgba(0, 240, 255, 0.35);
+    --brand-muted: #8295b5;
+    --brand-text: #e2e8f0;
+
+    /* Distinct Attack Category Colors */
+    --threat-gps: #ff2a55;      /* GPS Spoofing (Neon Crimson) */
+    --threat-flood: #ff9900;    /* MAVLink Rate Flood / DoS (Vivid Amber) */
+    --threat-inject: #a855f7;   /* Command Injection (Electric Violet) */
+    --threat-replay: #00e5ff;   /* Replay Attack (Neon Electric Cyan) */
+    --threat-drift: #10b981;    /* Sensor / Kinematic Anomaly (Neon Emerald) */
+
+    --hud-threat: #00f0ff;
 }
 
-/* Fallback for the pulse animation from app.js */
+/* ── Base & Full Scrollability ── */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    background-color: var(--brand-bg);
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: auto;
+}
+
+body {
+    background-color: var(--brand-bg);
+    color: var(--brand-text);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    margin: 0;
+    padding: 0;
+}
+
+/* ── Ambient Liquid Mesh Glow Orbs ── */
+.ambient-glow-1 {
+    position: fixed;
+    top: -12%;
+    left: 20%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0, 240, 255, 0.09) 0%, rgba(99, 102, 241, 0.03) 50%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(90px);
+    pointer-events: none;
+    z-index: 0;
+    animation: liquid-orb-1 25s ease-in-out infinite alternate;
+}
+
+.ambient-glow-2 {
+    position: fixed;
+    bottom: -15%;
+    right: 12%;
+    width: 700px;
+    height: 700px;
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.07) 0%, rgba(0, 240, 255, 0.04) 50%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(100px);
+    pointer-events: none;
+    z-index: 0;
+    animation: liquid-orb-2 30s ease-in-out infinite alternate;
+}
+
+.ambient-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(0, 240, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.025) 1px, transparent 1px);
+    background-size: 52px 52px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes liquid-orb-1 {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(70px, 50px) scale(1.18); }
+    100% { transform: translate(-40px, 90px) scale(0.92); }
+}
+
+@keyframes liquid-orb-2 {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(-90px, -60px) scale(1.22); }
+    100% { transform: translate(50px, -80px) scale(0.95); }
+}
+
+/* ── Liquid Glassmorphism Core ── */
+.glass-panel, .liquid-panel {
+    background: linear-gradient(135deg, rgba(11, 20, 42, 0.78) 0%, rgba(6, 12, 26, 0.88) 100%);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid var(--brand-border);
+    box-shadow:
+        0 14px 40px -8px rgba(0, 0, 0, 0.65),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.glass-card, .liquid-card {
+    background: linear-gradient(145deg, rgba(13, 24, 50, 0.65) 0%, rgba(8, 15, 32, 0.82) 100%);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(0, 240, 255, 0.14);
+    border-radius: 20px;
+    box-shadow:
+        0 12px 36px -6px rgba(0, 0, 0, 0.55),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.10);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.glass-card::before, .liquid-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.38) 50%, transparent 100%);
+    opacity: 0.8;
+    transition: opacity 0.3s;
+}
+
+.glass-card:hover, .liquid-card:hover {
+    border-color: rgba(0, 240, 255, 0.28);
+    box-shadow:
+        0 16px 44px -6px rgba(0, 0, 0, 0.7),
+        0 0 24px rgba(0, 240, 255, 0.12),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.18);
+    transform: translateY(-2px);
+}
+
+.glass-badge, .liquid-badge {
+    background: rgba(9, 18, 38, 0.88);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(0, 240, 255, 0.24);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ── Typography & Headings ── */
+.font-display {
+    font-family: 'Syne', 'Outfit', sans-serif;
+}
+
+.font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.section-heading, .section-title {
+    font-family: 'Outfit', 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+}
+
+/* ── Telemetry Tiles ── */
+.metric-tile, .telemetry-tile {
+    background: rgba(7, 14, 28, 0.6);
+    border: 1px solid rgba(0, 240, 255, 0.12);
+    border-radius: 14px;
+    padding: 12px 14px;
+    transition: all 0.25s ease;
+}
+
+.metric-tile:hover, .telemetry-tile:hover {
+    background: rgba(11, 22, 46, 0.75);
+    border-color: rgba(0, 240, 255, 0.26);
+}
+
+.metric-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--brand-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+
+.metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-top: 4px;
+    letter-spacing: -0.02em;
+}
+
+/* ── Liquid Buttons ── */
+.glass-btn, .liquid-btn {
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.glass-btn::after, .liquid-btn::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%; width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+    transition: left 0.6s ease;
+}
+
+.glass-btn:hover::after, .liquid-btn:hover::after {
+    left: 100%;
+}
+
+.glass-btn-cyan, .liquid-btn-cyan {
+    background: rgba(0, 240, 255, 0.08);
+    border-color: rgba(0, 240, 255, 0.35);
+    color: #00f0ff;
+    box-shadow: 0 4px 16px rgba(0, 240, 255, 0.1);
+}
+.glass-btn-cyan:hover, .liquid-btn-cyan:hover {
+    background: rgba(0, 240, 255, 0.18);
+    border-color: rgba(0, 240, 255, 0.65);
+    box-shadow: 0 6px 24px rgba(0, 240, 255, 0.28);
+    transform: translateY(-1px);
+}
+
+.glass-btn-red, .liquid-btn-danger {
+    background: rgba(255, 42, 85, 0.08);
+    border-color: rgba(255, 42, 85, 0.35);
+    color: #ff2a55;
+    box-shadow: 0 4px 16px rgba(255, 42, 85, 0.1);
+}
+.glass-btn-red:hover, .liquid-btn-danger:hover {
+    background: rgba(255, 42, 85, 0.2);
+    border-color: rgba(255, 42, 85, 0.7);
+    box-shadow: 0 6px 26px rgba(255, 42, 85, 0.32);
+    transform: translateY(-1px);
+}
+
+.glass-btn-subtle {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.glass-btn-subtle:hover {
+    background: rgba(0, 240, 255, 0.1);
+    border-color: rgba(0, 240, 255, 0.3);
+}
+
+/* ── Tactical Map & Corner Coordinates ── */
+#tactical-map {
+    width: 100%;
+    height: 100%;
+    min-height: 440px;
+    z-index: 1;
+}
+
+.leaflet-container {
+    background: #040813 !important;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.leaflet-control-zoom {
+    border: none !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
+}
+
+.leaflet-control-zoom a {
+    background: rgba(9, 18, 38, 0.88) !important;
+    color: #00f0ff !important;
+    border: 1px solid rgba(0, 240, 255, 0.28) !important;
+    backdrop-filter: blur(12px) !important;
+}
+
+/* Popup styling */
+.leaflet-popup-content-wrapper {
+    background: rgba(9, 18, 38, 0.94) !important;
+    color: #f1f5f9 !important;
+    border: 1px solid rgba(0, 240, 255, 0.4) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(16px) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8) !important;
+}
+.leaflet-popup-tip {
+    background: rgba(9, 18, 38, 0.94) !important;
+}
+
+/* Map Corner Coordinates HUD Box */
+.map-corner-hud {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    z-index: 20;
+    pointer-events: auto;
+}
+
+/* ── Drone Marker & Attached 3D Isometric HUD Cube ── */
+.drone-marker-wrap {
+    position: relative;
+    width: 44px;
+    height: 44px;
+}
+
 .drone-pulse {
     position: absolute;
-    top: 50%; left: 50%;
-    width: 100%; height: 100%;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 229, 255, 0.4);
+    background: rgba(0, 240, 255, 0.4);
     border-radius: 50%;
-    animation: radar-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+    animation: radar-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
     z-index: 1;
 }
 
 @keyframes radar-ping {
-    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+    0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.95; }
+    100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
 }
 
-/* Let the map take up the space nicely */
-#tactical-map {
-    width: 100%;
-    height: 100%;
+/* The floating mini 3D glass cube beside the drone */
+.drone-cube-hud {
+    position: absolute;
+    left: 48px;
+    top: -24px;
+    z-index: 40;
+    min-width: 175px;
+    background: rgba(9, 18, 38, 0.92);
+    backdrop-filter: blur(18px) saturate(200%);
+    -webkit-backdrop-filter: blur(18px) saturate(200%);
+    border: 1px solid rgba(0, 240, 255, 0.45);
+    border-radius: 12px;
+    padding: 8px 11px;
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.8),
+        0 0 16px rgba(0, 240, 255, 0.25),
+        inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    font-family: 'JetBrains Mono', monospace;
+    pointer-events: none;
+    transition: all 0.3s ease;
 }
 
-/* Threat items dynamically changed by app.js */
-/* app.js modifies classes on these elements directly, so we just let Tailwind classes handle the base look, 
-   but it injects background colors/shadows on threat. */
+.drone-cube-hud::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 30px;
+    width: 0;
+    height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 7px solid rgba(0, 240, 255, 0.45);
+}
+
+.drone-cube-title {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #67e8f9;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+    padding-bottom: 4px;
+    margin-bottom: 5px;
+}
+
+.drone-cube-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #00f0ff;
+    box-shadow: 0 0 6px #00f0ff;
+    animation: pulse 1.5s infinite;
+}
+
+/* Alert state for 3D drone cube */
+.drone-cube-hud.cube-alert {
+    border-color: #ff2a55;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 42, 85, 0.45);
+}
+.drone-cube-hud.cube-alert::before {
+    border-right-color: #ff2a55;
+}
+.drone-cube-hud.cube-alert .drone-cube-dot {
+    background-color: #ff2a55;
+    box-shadow: 0 0 8px #ff2a55;
+}
+.drone-cube-hud.cube-alert .drone-cube-title {
+    color: #ff2a55;
+    border-bottom-color: rgba(255, 42, 85, 0.25);
+}
+
+/* ── Threat Matrix Panel (Right of Map) ── */
+.threat-row, .threat-card {
+    background: rgba(8, 16, 32, 0.65);
+    border: 1px solid rgba(0, 240, 255, 0.12);
+    border-left: 4px solid var(--threat-color, #00f0ff);
+    border-radius: 0 14px 14px 0;
+    padding: 13px 15px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+
+.threat-row:hover, .threat-card:hover {
+    background: rgba(12, 24, 48, 0.8);
+    transform: translateX(3px);
+}
+
+.threat-row.active-threat, .threat-card.intercepting {
+    background: rgba(255, 42, 85, 0.12);
+    border-color: rgba(255, 42, 85, 0.5);
+    border-left-color: var(--threat-color, #ff2a55);
+    box-shadow: 0 0 26px rgba(255, 42, 85, 0.28), inset 0 0 12px rgba(255, 42, 85, 0.12);
+    animation: threat-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes threat-pulse {
+    0%   { box-shadow: 0 0 16px rgba(255, 42, 85, 0.22); }
+    100% { box-shadow: 0 0 34px rgba(255, 42, 85, 0.5); }
+}
+
+.threat-badge-safe {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.threat-badge-alert {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    background: rgba(255, 42, 85, 0.25);
+    color: #ff2a55;
+    border: 1px solid #ff2a55;
+    animation: pulse 1s infinite;
+}
+
+/* ── Moving Anomaly Waveform Graph Card ── */
+#anomaly-card {
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+#anomaly-card.chart-spike-alert {
+    border-color: rgba(255, 42, 85, 0.65) !important;
+    box-shadow: 0 0 34px rgba(255, 42, 85, 0.4) !important;
+    animation: spike-flash 0.8s ease-out;
+}
+
+@keyframes spike-flash {
+    0%   { background-color: rgba(255, 42, 85, 0.18); }
+    100% { background-color: transparent; }
+}
+
+/* ── Map Attack Dots with Radar Beacon Animation ── */
+.attack-marker-glow {
+    position: relative;
+    border-radius: 50%;
+}
+
+@keyframes attack-beacon {
+    0%   { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(3.0); opacity: 0; }
+}
+
+/* ── Glow Classes ── */
+.glow-accent {
+    box-shadow: 0 0 12px var(--brand-accent);
+}
+
+/* ── Fullscreen Threat Flash ── */
+body.critical-threat-mode {
+    box-shadow: inset 0 0 80px rgba(255, 42, 85, 0.35);
+}
+
+/* ── Custom Liquid Scrollbars ── */
+::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(4, 8, 19, 0.8);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 240, 255, 0.25);
+    border-radius: 4px;
+    border: 1px solid rgba(0, 240, 255, 0.1);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 240, 255, 0.6);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 240, 255, 0.3) rgba(4, 8, 19, 0.6);
+}

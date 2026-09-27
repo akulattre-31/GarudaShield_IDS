@@ -3,9 +3,14 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Garudakaavach // Tactical IDS</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@300,0..1&display=swap" rel="stylesheet"/>
+    <title>Garuda Kavach — Cyber-Physical Drone Defense Sentinel</title>
+
+    <!-- Typography: Syne, Outfit, Space Grotesk, Plus Jakarta Sans, JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -13,258 +18,491 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Rajdhani', 'sans-serif'],
-                        orbitron: ['Orbitron', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
+                        sans:    ['Plus Jakarta Sans', 'sans-serif'],
+                        display: ['Syne', 'Outfit', 'sans-serif'],
+                        mono:    ['JetBrains Mono', 'monospace'],
                     },
                     colors: {
                         brand: {
-                            bg: '#0B0D14',
-                            surface: '#12151F',
-                            border: '#23283B',
-                            accent: '#00E5FF',
-                            text: '#E2E8F0',
-                            muted: '#94A3B8',
-                            danger: '#EF4444',
-                            warning: '#F59E0B',
+                            bg:      '#040813',
+                            surface: '#0a1226',
+                            border:  '#1e293b',
+                            accent:  '#00f0ff',
+                            text:    '#e2e8f0',
+                            muted:   '#8295b5',
+                            danger:  '#ff2a55',
+                            warning: '#ff9900',
+                            violet:  '#a855f7',
+                            emerald: '#10b981',
                         }
                     }
                 }
             }
         }
     </script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Leaflet & Chart.js -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body class="bg-[#050A10] text-brand-text font-sans min-h-screen flex flex-col overflow-hidden selection:bg-brand-accent selection:text-black" style="background-image: radial-gradient(circle at 50% 50%, rgba(0, 229, 255, 0.05) 0%, transparent 80%), linear-gradient(rgba(0, 229, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px); background-size: 100% 100%, 30px 30px, 30px 30px; background-position: center, center, center;">
 
-<!-- HEADER -->
-<header id="status-banner" class="flex-none bg-brand-surface/60 backdrop-blur-lg border-b border-brand-accent/50 shadow-[0_0_20px_rgba(0,229,255,0.2)] px-6 py-4 flex items-center justify-between shadow-md transition-all duration-300">
-    <div class="flex items-center gap-4">
-        <div id="status-icon" class="w-3 h-3 bg-brand-accent rounded-full animate-pulse" style="box-shadow: 0 0 10px var(--hud-threat, #00E5FF);"></div>
-        <h1 class="text-xl font-orbitron font-bold tracking-[0.2em] uppercase text-white flex items-center gap-2">
-            <span class="material-symbols-outlined">security</span>
-            <span id="status-text">GARUDAKAAVACH // IDS SENSOR FUSION</span>
-        </h1>
-    </div>
-    <div class="flex items-center gap-6 font-mono text-sm">
-        <div class="flex items-center gap-1"><span class="text-brand-muted">ZULU:</span> <span id="zulu-clock" class="text-brand-accent">14:32:08 Z</span></div>
-        <div class="flex items-center gap-1"><span class="text-brand-muted">LAT:</span> <span id="lat-display" class="text-brand-accent">0.000000</span></div>
-        <div class="flex items-center gap-1"><span class="text-brand-muted">LON:</span> <span id="lon-display" class="text-brand-accent">0.000000</span></div>
+<body class="bg-brand-bg text-brand-text font-sans min-h-screen selection:bg-brand-accent selection:text-black">
+
+<!-- Ambient Background Glow Mesh Elements -->
+<div class="ambient-glow-1"></div>
+<div class="ambient-glow-2"></div>
+<div class="ambient-grid"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     HEADER — Center-Aligned Garuda Kavach, Human Local Clock
+══════════════════════════════════════════════════════════════ -->
+<header id="status-banner" class="glass-panel sticky top-0 z-50 px-6 py-3.5 transition-all duration-300">
+    <div class="max-w-[1740px] mx-auto grid grid-cols-1 md:grid-cols-3 items-center gap-4">
+
+        <!-- Left: Ingress Telemetry Status -->
+        <div class="flex items-center gap-3 justify-start">
+            <div id="status-icon" class="w-3.5 h-3.5 bg-brand-accent rounded-full animate-pulse glow-accent"></div>
+            <div class="flex flex-col">
+                <span id="status-text" class="font-mono text-[11px] font-semibold tracking-wider text-cyan-300 uppercase">
+                    Sentinel Shield Online
+                </span>
+                <span id="sub-status-text" class="text-[10px] text-brand-muted font-mono">
+                    Ingress Port 9000 // Verified HMAC UDP
+                </span>
+            </div>
+        </div>
+
+        <!-- Center: Prominently Centered Garuda Kavach Title -->
+        <div class="flex flex-col items-center text-center">
+            <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-brand-accent text-2xl lg:text-3xl">shield_with_heart</span>
+                <h1 class="font-display font-extrabold text-2xl lg:text-3xl tracking-tight leading-none">
+                    <span class="bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-300 bg-clip-text text-transparent">GARUDA</span>
+                    <span class="text-white drop-shadow-[0_0_14px_rgba(0,240,255,0.45)]">KAVACH</span>
+                </h1>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+                <span class="font-mono text-[9px] text-brand-muted tracking-[0.24em] uppercase">
+                    Cyber-Physical Air Defense Sentinel
+                </span>
+                <span class="w-1 h-1 rounded-full bg-brand-accent/60"></span>
+                <span class="font-mono text-[9px] text-cyan-400 font-bold tracking-wider uppercase">
+                    Team Garuda Kavach
+                </span>
+            </div>
+        </div>
+
+        <!-- Right: Human Local Time (NO robotic Zulu) -->
+        <div class="flex items-center justify-end gap-3 font-mono text-xs">
+            <div class="glass-badge px-3.5 py-1.5 rounded-xl flex items-center gap-2 text-brand-muted">
+                <span class="material-symbols-outlined text-[15px] text-brand-accent">schedule</span>
+                <span id="local-clock" class="text-brand-text font-semibold tracking-wider">--:--:--</span>
+                <span id="local-tz" class="text-[10px] text-brand-accent font-medium">LOCAL</span>
+            </div>
+            <div class="hidden xl:flex items-center gap-1.5 text-[10px] text-brand-muted border-l border-brand-border/60 pl-3">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>TAILSCALE 100.85.18.10</span>
+            </div>
+        </div>
+
     </div>
 </header>
 
-<!-- MAIN WORKSPACE -->
-<main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-73px)]">
+<!-- ══════════════════════════════════════════════════════════════
+     MAIN SCROLLABLE WORKSPACE
+══════════════════════════════════════════════════════════════ -->
+<main class="max-w-[1740px] mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 pb-20 relative z-10">
 
-    <!-- LEFT COLUMN: Telemetry & Compute (3 cols) -->
-    <aside class="lg:col-span-3 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2 pb-6">
-        
-        <!-- TELEMETRY -->
-        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col shadow-sm">
-            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center gap-2">
-                <span class="material-symbols-outlined text-[16px]">flight</span> Flight Telemetry
+    <!-- ── LEFT COLUMN (3 cols) ── -->
+    <aside class="lg:col-span-3 flex flex-col gap-5">
+
+        <!-- 1. FLIGHT TELEMETRY -->
+        <section class="glass-card p-5">
+            <h2 class="section-heading">
+                <span class="material-symbols-outlined text-[17px] text-cyan-400">flight_takeoff</span>
+                Flight Telemetry
             </h2>
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-brand-bg rounded p-3 text-center border border-brand-border/50">
-                    <div class="text-[10px] text-brand-muted mb-1 tracking-wider uppercase">Altitude (m)</div>
-                    <div id="alt-val" class="font-mono text-xl font-bold text-brand-accent">0.0</div>
-                    <div class="mt-2 flex gap-[2px] h-1.5" id="alt-segments">
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="metric-tile">
+                    <div class="metric-label">Relative Altitude</div>
+                    <div id="alt-val" class="metric-value">0.0 m</div>
+                    <div class="mt-2.5 flex gap-[3px] h-1.5" id="alt-segments">
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
                     </div>
                 </div>
-                <div class="bg-brand-bg rounded p-3 text-center border border-brand-border/50">
-                    <div class="text-[10px] text-brand-muted mb-1 tracking-wider uppercase">Speed (m/s)</div>
-                    <div id="spd-val" class="font-mono text-xl font-bold text-brand-accent">0.0</div>
-                    <div class="mt-2 flex gap-[2px] h-1.5" id="spd-segments">
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
-                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                <div class="metric-tile">
+                    <div class="metric-label">Airspeed</div>
+                    <div id="spd-val" class="metric-value">0.0 m/s</div>
+                    <div class="mt-2.5 flex gap-[3px] h-1.5" id="spd-segments">
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
+                        <div class="h-full w-full bg-slate-700/60 rounded-full"></div>
                     </div>
                 </div>
             </div>
-            <div class="flex justify-between items-center text-[11px] font-mono border-t border-brand-border pt-3">
-                <span class="text-brand-muted">LATENCY: <span id="lat-val" class="text-brand-accent font-bold">18</span> ms</span>
-                <span class="text-brand-accent">STABLE LINK</span>
+            <div class="flex justify-between items-center text-[11px] font-mono border-t border-brand-border/60 pt-3">
+                <span class="text-brand-muted">Ingress Latency: <span id="lat-val" class="text-brand-accent font-semibold">—</span> ms</span>
+                <span id="telemetry-sync-badge" class="px-2 py-0.5 rounded-full bg-cyan-950/70 border border-cyan-500/30 text-cyan-300 text-[9px] tracking-wider uppercase font-semibold">
+                    Inertial Synced
+                </span>
             </div>
         </section>
 
-        <!-- COMPUTE & AVIONICS -->
-        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col shadow-sm">
-            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center gap-2">
-                <span class="material-symbols-outlined text-[16px]">memory</span> System Diagnostics
+        <!-- 2. ONBOARD AVIONICS HEALTH -->
+        <section class="glass-card p-5">
+            <h2 class="section-heading">
+                <span class="material-symbols-outlined text-[17px] text-cyan-400">memory</span>
+                Onboard Avionics Health
             </h2>
-            
             <div class="mb-4">
                 <div class="flex justify-between text-[11px] mb-1.5 font-mono">
-                    <span class="text-brand-muted tracking-wider">CPU LOAD</span>
-                    <span id="cpu-val-text" class="text-brand-accent font-bold">0%</span>
+                    <span class="text-brand-muted">Onboard CPU Load</span>
+                    <span id="cpu-val-text" class="text-brand-accent font-semibold">0%</span>
                 </div>
-                <div class="flex gap-1 h-8 items-end" id="cpu-segments">
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[40%]"></div></div>
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[60%]"></div></div>
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[30%]"></div></div>
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[90%]"></div></div>
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[50%]"></div></div>
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[20%]"></div></div>
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[70%]"></div></div>
-                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[45%]"></div></div>
+                <div class="flex gap-[3px] h-8 items-end" id="cpu-segments">
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[40%]"></div></div>
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[55%]"></div></div>
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[30%]"></div></div>
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[80%]"></div></div>
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[45%]"></div></div>
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[25%]"></div></div>
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[65%]"></div></div>
+                    <div class="w-full bg-slate-800/60 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[40%]"></div></div>
                 </div>
             </div>
-
             <div class="mb-4">
                 <div class="flex justify-between text-[11px] mb-1.5 font-mono">
-                    <span class="text-brand-muted tracking-wider">RAM BUFFER</span>
-                    <span id="ram-val-text" class="text-brand-accent font-bold">0%</span>
-                    <span id="ram-val" class="hidden">0</span>
+                    <span class="text-brand-muted">RAM Utilization</span>
+                    <span id="ram-val-text" class="text-brand-accent font-semibold">0%</span>
                 </div>
-                <div class="h-2 bg-brand-bg border border-brand-border/50 rounded-full overflow-hidden">
-                    <div id="ram-fill" class="h-full bg-brand-accent transition-all" style="width: 0%"></div>
+                <div class="h-2 bg-slate-800/80 rounded-full overflow-hidden p-[1px]">
+                    <div id="ram-fill" class="h-full bg-gradient-to-r from-brand-accent via-cyan-400 to-sky-300 rounded-full transition-all duration-500" style="width:0%"></div>
                 </div>
             </div>
-
-
-            <div class="mt-2 pt-4 border-t border-brand-border">
-                <div class="flex justify-between text-[10px] mb-2 text-brand-muted uppercase tracking-wider">
-                    <span>MavLink Signal Activity</span>
-                    <span id="mavlink-status" class="text-brand-accent">NOMINAL</span>
+            <div class="pt-3 border-t border-brand-border/60">
+                <div class="flex justify-between text-[10px] mb-2 font-mono">
+                    <span class="text-brand-muted uppercase tracking-wider">MAVLink Packet Stream</span>
+                    <span id="mavlink-status" class="text-brand-accent font-semibold">NOMINAL</span>
                 </div>
-                <div class="flex items-end gap-[2px] h-12 w-full" id="rf-spectrum-bars">
-                    <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:30%"></div>
-                    <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:50%"></div>
-                    <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:20%"></div>
-                    <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:40%"></div>
-                    <div class="flex-1 bg-brand-accent/50 rounded-t-sm" style="height:60%"></div>
+                <div class="flex items-end gap-[3px] h-10 w-full" id="rf-spectrum-bars">
+                    <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:35%"></div>
+                    <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:55%"></div>
+                    <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:25%"></div>
                     <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:45%"></div>
-                    <div class="flex-1 bg-brand-accent/50 rounded-t-sm" style="height:35%"></div>
+                    <div class="flex-1 bg-brand-accent/50 rounded-t-sm" style="height:65%"></div>
+                    <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:50%"></div>
+                    <div class="flex-1 bg-brand-accent/50 rounded-t-sm" style="height:40%"></div>
                     <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:30%"></div>
                 </div>
-                <div class="text-[9px] text-brand-muted mt-1">Packet rate anomaly detection via eBPF ingress analysis</div>
+                <p class="text-[9px] text-brand-muted/70 mt-1 font-mono">Kernel-level eBPF packet rate inspection</p>
             </div>
         </section>
-        
-        <!-- MANUAL OVERRIDE -->
-        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col shadow-sm">
-            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center justify-between">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">pan_tool</span> Actuators</span>
-                <span class="text-[9px] text-brand-warning border border-brand-warning/30 bg-brand-warning/10 px-1.5 py-0.5 rounded tracking-widest">AUTH L-4</span>
+
+        <!-- 3. EMERGENCY COUNTERMEASURES (Formerly Actuators; Explainable & Human Rationale) -->
+        <section class="glass-card p-5">
+            <h2 class="section-heading justify-between">
+                <span class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[17px] text-cyan-400">gavel</span>
+                    Emergency Countermeasures
+                </span>
+                <span class="text-[9px] font-mono text-cyan-300 border border-cyan-500/30 bg-cyan-950/40 px-2.5 py-0.5 rounded-full tracking-wider font-semibold">
+                    TACTICAL OVERRIDE
+                </span>
             </h2>
-            <button class="btn-brake w-full mb-3 bg-brand-surface/40 hover:bg-brand-accent/20 border border-brand-accent/50 shadow-[0_0_15px_rgba(0,229,255,0.1)] hover:shadow-[0_0_25px_rgba(0,229,255,0.4)] text-brand-accent py-2.5 px-4 rounded-lg text-xs font-orbitron font-bold tracking-widest transition-all duration-300 flex items-center justify-center gap-2">
-                <span class="material-symbols-outlined text-[18px]">front_hand</span> FORCE BRAKE
+
+            <!-- Countermeasure 1: Immediate Airborne Brake -->
+            <button class="btn-brake w-full mb-3 group glass-btn glass-btn-cyan text-brand-accent py-3.5 px-4 rounded-xl text-xs font-display font-semibold tracking-wide flex flex-col items-start gap-1">
+                <div class="flex items-center gap-2 w-full text-cyan-300">
+                    <span class="material-symbols-outlined text-[20px]">front_hand</span>
+                    <span class="text-sm font-bold">Immediate Airborne Brake</span>
+                </div>
+                <span class="text-[10px] text-brand-muted/95 font-sans font-normal leading-tight ml-7 text-left">
+                    <strong class="text-cyan-300">Why needed:</strong> Instantly zeroes velocity vectors and commands aerodynamic stationary hover lock mid-air, halting unauthorized deviation, hijacking, or rogue navigation into restricted airspace.
+                </span>
             </button>
-            <button class="btn-rtl w-full bg-brand-danger/10 hover:bg-brand-danger/30 border border-brand-danger/50 hover:border-brand-danger shadow-[0_0_15px_rgba(239,68,68,0.2)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] text-brand-danger py-2.5 px-4 rounded-lg text-xs font-orbitron font-bold tracking-widest transition-all duration-300 flex items-center justify-center gap-2">
-                <span class="material-symbols-outlined text-[18px]">home_pin</span> FORCE RTL
+
+            <!-- Countermeasure 2: Autonomous Return to Base (RTL) -->
+            <button class="btn-rtl w-full group glass-btn glass-btn-red text-brand-danger py-3.5 px-4 rounded-xl text-xs font-display font-semibold tracking-wide flex flex-col items-start gap-1">
+                <div class="flex items-center gap-2 w-full text-rose-400">
+                    <span class="material-symbols-outlined text-[20px]">home_pin</span>
+                    <span class="text-sm font-bold">Autonomous Return to Base (RTL)</span>
+                </div>
+                <span class="text-[10px] text-brand-danger/90 font-sans font-normal leading-tight ml-7 text-left">
+                    <strong class="text-rose-300">Why needed:</strong> Disengages vulnerable external telemetry and overrides spoofed GPS inputs, forcing the autopilot into self-contained inertial return-to-base navigation back to the designated secure launch point.
+                </span>
             </button>
         </section>
 
     </aside>
 
-    <!-- CENTER COLUMN: Map & Ledger (6 cols) -->
-    <div class="lg:col-span-6 flex flex-col gap-6 pb-6 h-full">
-        
-        <!-- MAP PANEL -->
-        <div class="relative bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl flex-1 overflow-hidden min-h-[300px] flex flex-col shadow-sm">
-            <div id="tactical-map" class="absolute inset-0 z-0"></div>
-            
-            <div class="absolute inset-0 pointer-events-none z-[5] bg-[radial-gradient(circle,rgba(0,229,255,0.03)_0%,rgba(11,13,20,0.4)_100%)]"></div>
-            
-            <div class="absolute top-4 left-4 z-10 bg-brand-surface/90 backdrop-blur border border-brand-border px-3 py-1.5 rounded text-[10px] font-mono text-brand-accent tracking-widest shadow-lg">
-                AZIMUTH: 360° // GEO-ZONE ACTIVE
+    <!-- ── CENTER COLUMN (6 cols) ── -->
+    <div class="lg:col-span-6 flex flex-col gap-5">
+
+        <!-- 4. TACTICAL MAP CONTAINER WITH CORNER HUD & BESIDE-DRONE 3D CUBE -->
+        <div class="glass-card rounded-2xl overflow-hidden flex flex-col" style="min-height: 450px;">
+            <div class="relative flex-1" style="min-height: 450px;">
+
+                <!-- Leaflet Tactical Map (scrollWheelZoom disabled for smooth page scroll) -->
+                <div id="tactical-map" class="absolute inset-0 z-0"></div>
+
+                <!-- Map Vignette Overlay -->
+                <div class="absolute inset-0 pointer-events-none z-[5]"
+                     style="background: radial-gradient(ellipse at center, transparent 55%, rgba(4,8,19,0.75) 100%)"></div>
+
+                <!-- Top-Left Status Badge -->
+                <div class="absolute top-3 left-3 z-10 glass-badge px-3 py-1.5 rounded-xl font-mono text-[10px] text-brand-accent tracking-widest flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span>GEO-ZONE AIR DEFENSE ACTIVE</span>
+                </div>
+
+                <!-- Top-Right Drone Status Pill -->
+                <div class="absolute top-3 right-3 z-10 glass-badge px-3 py-1.5 rounded-xl font-mono text-[10px] text-brand-muted tracking-wider flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[14px] text-brand-accent">radar</span>
+                    <span id="map-drone-status" class="text-cyan-300 font-semibold">PATROLLING SECTOR A</span>
+                </div>
+
+                <!-- Corner of the Map HUD Overlay: High-Precision Coordinates -->
+                <div class="map-corner-hud glass-badge px-4 py-2.5 rounded-xl font-mono text-[11px] shadow-2xl border border-cyan-400/40">
+                    <div class="text-[9px] text-brand-muted tracking-widest uppercase mb-1 font-bold flex items-center gap-1.5 border-b border-brand-border/60 pb-1">
+                        <span class="material-symbols-outlined text-[13px] text-cyan-400">my_location</span>
+                        <span>Tactical Nav Coordinates</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-5 gap-y-0.5 text-[11px]">
+                        <div class="flex items-center gap-2">
+                            <span class="text-brand-muted text-[10px] font-semibold w-7">LAT</span>
+                            <span id="lat-display" class="text-cyan-300 font-bold tracking-wider">-35.363262°</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-brand-muted text-[10px] font-semibold w-7">LON</span>
+                            <span id="lon-display" class="text-cyan-300 font-bold tracking-wider">149.165237°</span>
+                        </div>
+                    </div>
+                    <div class="mt-1 flex items-center justify-between text-[9px] text-brand-muted pt-1 border-t border-brand-border/40">
+                        <span>ALT: <span id="map-alt-hud" class="text-brand-accent font-semibold">150.0m</span></span>
+                        <span id="gps-fix-badge" class="text-emerald-400 font-semibold">RTK-3D FIX</span>
+                    </div>
+                </div>
+
+                <!-- Hidden legacy chart canvas for safety -->
+                <canvas id="residualChart" class="hidden"></canvas>
             </div>
-            
-            <!-- Hide residualChart to keep DOM happy but UI clean -->
-            <canvas id="residualChart" class="hidden"></canvas>
         </div>
 
-        <!-- INCIDENT LEDGER -->
-        <div class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col h-[280px] shrink-0 shadow-sm">
-            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-3 border-b border-brand-border pb-2 flex items-center justify-between">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">list_alt</span> Incident Ledger</span>
-                <button id="export-btn" class="text-[10px] px-2.5 py-1 bg-brand-bg border border-brand-border hover:border-brand-accent text-brand-text hover:text-brand-accent rounded transition-colors flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">download</span> Export JSON
-                </button>
-            </h2>
-            <div class="flex-1 overflow-auto custom-scrollbar">
+        <!-- 5. REAL-TIME MOVING ANOMALY WAVEFORM GRAPH -->
+        <section id="anomaly-card" class="glass-card p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2.5">
+                    <span class="material-symbols-outlined text-[19px] text-cyan-400">stacked_line_chart</span>
+                    <h2 class="font-display text-sm font-bold uppercase tracking-wider text-white">
+                        Live Anomaly Waveform — Kinematic Residual (χ²)
+                    </h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="anomaly-dot" class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse glow-accent"></span>
+                    <span class="font-mono text-[11px] font-semibold text-cyan-300" id="anomaly-status-label">
+                        Monitoring sensor stream…
+                    </span>
+                </div>
+            </div>
+
+            <!-- Descriptive Subtitle -->
+            <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans">
+                Real-time physics vs GPS divergence monitor. When an intrusion happens (GPS spoofing, injection, or rate flood), the kinematic residual spikes violently above the <strong class="text-amber-400">16.81 χ²</strong> threshold, instantly generating a forensic log.
+            </p>
+
+            <!-- Live Scrolling Waveform Canvas -->
+            <div class="relative h-40 w-full bg-slate-950/70 rounded-xl p-2 border border-slate-800/80 overflow-hidden">
+                <canvas id="anomalyChart"></canvas>
+            </div>
+
+            <!-- Waveform Legend & Status -->
+            <div class="flex items-center justify-between flex-wrap gap-3 font-mono text-[10px] text-brand-muted pt-1">
+                <div class="flex items-center gap-5">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3.5 h-1 bg-cyan-400 inline-block rounded-full"></span>
+                        <span>χ² Kinematic Residual</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3.5 h-0.5 inline-block border-t-2 border-dashed border-amber-400"></span>
+                        <span class="text-amber-400/90 font-semibold">Threshold (16.81)</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[9px] text-brand-muted/70">Continuous 10Hz Feed</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. FORENSIC INCIDENT LEDGER -->
+        <section class="glass-card p-5 flex flex-col">
+            <div class="flex items-center justify-between pb-3 mb-3 border-b border-brand-border/60">
+                <h2 class="font-display text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[17px]">list_alt</span>
+                    Forensic Incident Ledger
+                </h2>
+                <div class="flex items-center gap-3">
+                    <span class="font-mono text-[10px] text-brand-muted">Retaining map dots: max 5/type, 10 total</span>
+                    <button id="export-btn" class="text-[10px] font-mono px-3 py-1.5 glass-btn glass-btn-subtle rounded-xl flex items-center gap-1 text-brand-muted hover:text-cyan-300 transition-colors">
+                        <span class="material-symbols-outlined text-[13px]">download</span>
+                        Export JSON
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-auto custom-scrollbar" style="max-height: 220px;">
                 <table class="w-full text-left text-[11px]">
-                    <thead class="sticky top-0 bg-brand-surface z-10 text-brand-muted border-b border-brand-border">
-                        <tr>
-                            <th class="py-2 px-3 font-medium tracking-wider">ID</th>
-                            <th class="py-2 px-3 font-medium tracking-wider">TIME</th>
-                            <th class="py-2 px-3 font-medium tracking-wider">THREAT</th>
-                            <th class="py-2 px-3 font-medium tracking-wider">ACTION</th>
-                            <th class="py-2 px-3 font-medium tracking-wider">HASH</th>
+                    <thead class="sticky top-0 z-10 font-mono bg-brand-surface/95 backdrop-blur-md">
+                        <tr class="text-brand-muted border-b border-brand-border/60">
+                            <th class="py-2.5 px-3 font-semibold tracking-wider">#</th>
+                            <th class="py-2.5 px-3 font-semibold tracking-wider">Time</th>
+                            <th class="py-2.5 px-3 font-semibold tracking-wider">Attack Signature</th>
+                            <th class="py-2.5 px-3 font-semibold tracking-wider">Countermeasure</th>
+                            <th class="py-2.5 px-3 font-semibold tracking-wider">Log Hash</th>
                         </tr>
                     </thead>
-                    <tbody id="ledger-body" class="font-mono text-gray-300">
-                        <!-- Rows injected via JS -->
+                    <tbody id="ledger-body" class="font-mono text-brand-text divide-y divide-brand-border/30">
+                        <!-- Injected dynamically by app.js -->
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
 
     </div>
 
-    <!-- RIGHT COLUMN: Threat Matrix (3 cols) -->
-    <aside class="lg:col-span-3 flex flex-col gap-6 pb-6">
-        
-        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col h-full shadow-sm">
-            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center justify-between">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">gavel</span> Threat Matrix</span>
-                <span class="px-2 py-0.5 bg-brand-danger/10 text-brand-danger border border-brand-danger/30 rounded text-[9px] tracking-widest">ACTIVE</span>
-            </h2>
-            
-            <div class="flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
-                <div id="threat-gps" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
-                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
-                        <span>GPS Spoofing</span>
-                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
+    <!-- ── RIGHT COLUMN (3 cols) — Dynamic Threat Watch Matrix ── -->
+    <aside class="lg:col-span-3 flex flex-col gap-5">
+
+        <section class="glass-card p-5 flex flex-col gap-3.5">
+            <div class="flex items-center justify-between pb-3 border-b border-brand-border/60">
+                <h2 class="font-display text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">verified_user</span>
+                    Threat Watch Matrix
+                </h2>
+                <span class="px-2.5 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 rounded-full text-[9px] font-mono tracking-widest uppercase font-semibold">
+                    Live Surveillance
+                </span>
+            </div>
+
+            <!-- Threat 1: GPS Spoofing (Neon Crimson) -->
+            <div id="threat-gps" class="threat-row" data-threat="gps" style="--threat-color: #ff2a55;">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#ff2a55] shadow-[0_0_8px_#ff2a55]"></span>
+                        <span class="font-display font-bold text-[13px] text-white">GPS Spoofing</span>
                     </div>
-                    <p class="text-[11px] text-brand-muted leading-relaxed">Pseudo-range and carrier phase analysis on L1/L2 band nominal.</p>
+                    <span class="threat-badge-safe">Clear</span>
                 </div>
-                
-                <div id="threat-dos" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
-                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
-                        <span>MAVLink Flood</span>
-                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
-                    </div>
-                    <p class="text-[11px] text-brand-muted leading-relaxed">eBPF ingress traffic analysis nominal. No rate anomalies detected.</p>
-                </div>
-                
-                <div id="threat-cmd" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
-                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
-                        <span>Cmd Injection</span>
-                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
-                    </div>
-                    <p class="text-[11px] text-brand-muted leading-relaxed">Cryptographic Ed25519 signature verification active. Zero execution blocks.</p>
-                </div>
-                
-                <div id="threat-rpl" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
-                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
-                        <span>Replay Attack</span>
-                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
-                    </div>
-                    <p class="text-[11px] text-brand-muted leading-relaxed">Nonce sequence and temporal window checks passed without incident.</p>
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                    Compares satellite coordinates against onboard inertial Kalman filters. Forged or jumped coordinates trip instant physical position lock.
+                </p>
+                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                    <span class="event-counter">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-rose-300 hover:bg-rose-950/50" data-attack="GPS_SPOOFING">
+                        Test Spike
+                    </button>
                 </div>
             </div>
-            
-            <div class="mt-auto pt-4 border-t border-brand-border text-[10px] text-brand-muted text-center tracking-widest uppercase flex items-center justify-center gap-2">
-                <span class="w-1.5 h-1.5 bg-brand-accent rounded-full animate-pulse"></span>
-                System Monitoring Active
+
+            <!-- Threat 2: Command / Rate Flood (Vivid Amber) -->
+            <div id="threat-dos" class="threat-row" data-threat="dos" style="--threat-color: #ff9900;">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#ff9900] shadow-[0_0_8px_#ff9900]"></span>
+                        <span class="font-display font-bold text-[13px] text-white">MAVLink Rate Flood</span>
+                    </div>
+                    <span class="threat-badge-safe">Clear</span>
+                </div>
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                    Kernel-level eBPF packet inspection. Throttles high-frequency command floods (DoS) aimed at overwhelming flight microcontroller loops.
+                </p>
+                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                    <span class="event-counter">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-amber-300 hover:bg-amber-950/50" data-attack="MAVLINK_FLOOD">
+                        Test Spike
+                    </button>
+                </div>
+            </div>
+
+            <!-- Threat 3: Command Injection (Electric Violet) -->
+            <div id="threat-cmd" class="threat-row" data-threat="injection" style="--threat-color: #a855f7;">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#a855f7] shadow-[0_0_8px_#a855f7]"></span>
+                        <span class="font-display font-bold text-[13px] text-white">Command Injection</span>
+                    </div>
+                    <span class="threat-badge-safe">Clear</span>
+                </div>
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                    Validates cryptographic Ed25519 signatures on flight commands. Unsigned or rogue heading instructions are dropped before autopilot execution.
+                </p>
+                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                    <span class="event-counter">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-purple-300 hover:bg-purple-950/50" data-attack="COMMAND_INJECTION">
+                        Test Spike
+                    </button>
+                </div>
+            </div>
+
+            <!-- Threat 4: Replay Attack (Neon Electric Cyan) -->
+            <div id="threat-rpl" class="threat-row" data-threat="replay" style="--threat-color: #00e5ff;">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]"></span>
+                        <span class="font-display font-bold text-[13px] text-white">Replay Attack</span>
+                    </div>
+                    <span class="threat-badge-safe">Clear</span>
+                </div>
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                    Enforces temporal freshness and rolling nonce counters. Captured valid packets retransmitted by an adversary expire and are discarded.
+                </p>
+                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                    <span class="event-counter">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-cyan-300 hover:bg-cyan-950/50" data-attack="REPLAY_ATTACK">
+                        Test Spike
+                    </button>
+                </div>
+            </div>
+
+            <!-- Threat 5: Kinematic Drift / Sensor Anomaly (Neon Emerald) -->
+            <div id="threat-drift" class="threat-row" data-threat="drift" style="--threat-color: #10b981;">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></span>
+                        <span class="font-display font-bold text-[13px] text-white">Sensor Drift / Anomaly</span>
+                    </div>
+                    <span class="threat-badge-safe">Clear</span>
+                </div>
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                    Extended Kalman Filter residual scoring. Unphysical accelerations or IMU-barometer decoupling are flagged as sensor manipulation.
+                </p>
+                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                    <span class="event-counter">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-emerald-300 hover:bg-emerald-950/50" data-attack="SENSOR_ANOMALY">
+                        Test Spike
+                    </button>
+                </div>
+            </div>
+
+            <!-- Matrix Footer -->
+            <div class="mt-auto pt-3 border-t border-brand-border/60 text-[10px] text-brand-muted text-center font-mono tracking-wider flex items-center justify-center gap-2">
+                <span class="w-2 h-2 bg-brand-accent rounded-full animate-pulse glow-accent"></span>
+                <span>Team Garuda Kavach // Defense matrix active</span>
             </div>
         </section>
 
@@ -272,31 +510,7 @@
 
 </main>
 
-<style>
-/* Clean scrollbar */
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #23283B; border-radius: 4px; }
-.custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #00E5FF; }
-
-/* Threat Mode background */
-body.critical-threat-mode {
-    background-color: #1a0505;
-    transition: background-color 0.2s ease;
-}
-
-/* Leaflet map styles for dark sleek look */
-.leaflet-layer,
-.leaflet-control-zoom-in,
-.leaflet-control-zoom-out,
-.leaflet-control-attribution {
-  filter: brightness(0.85) saturate(1.2) contrast(1.05);
-}
-.leaflet-container { background: #0B0D14 !important; font-family: 'JetBrains Mono', monospace; }
-.leaflet-popup-content-wrapper { background: #12151F; color: #E2E8F0; border: 1px solid #23283B; border-radius: 4px; }
-.leaflet-popup-tip { background: #12151F; }
-</style>
-
 <script src="/static/js/app.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

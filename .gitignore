@@ -1,3 +1,11 @@
 drone_env/
+drvenv/
 *.csv
 __pycache__/
+*.pyc
+
+# Security & Keys (Do not commit shared secret keys)
+keys/
+*.key
+*.pem
+.env

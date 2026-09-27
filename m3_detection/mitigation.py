@@ -26,8 +26,8 @@ from pymavlink import mavutil
 # Safety flag: set to False during development, True during demo
 ENABLE_FAILSAFE = True
 
-RULE_MIN_CONFIDENCE = 0.70   # rule/ekf/seq_validator/rate_limiter detections
-ML_MIN_CONFIDENCE = 0.70     # ML unknown-anomaly detections (aligned with runtime engine gate)
+RULE_MIN_CONFIDENCE = 0.50   # rule/ekf/seq_validator/rate_limiter detections
+ML_MIN_CONFIDENCE = 0.50     # ML unknown-anomaly detections (aligned with runtime engine gate)
 
 # ArduCopter custom mode IDs
 MODE_RTL = 6
@@ -71,6 +71,7 @@ FAILSAFE_MAP = {
     'FORCED_TAKEOFF':            ('BRAKE', MODE_BRAKE),
     'TAKEOFF':                   ('BRAKE', MODE_BRAKE),
     'LAND':                      ('BRAKE', MODE_BRAKE),
+    'ROGUE_LAND':                ('BRAKE', MODE_BRAKE),
     'LAND_HIJACK':               ('BRAKE', MODE_BRAKE),
 
     # --- GPS jamming & rogue injection ---

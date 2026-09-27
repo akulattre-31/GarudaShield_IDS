@@ -30,9 +30,9 @@ from secure_transport import SecureSender, SecureReceiver
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-MAVLINK_URL        = 'udp:0.0.0.0:14551'
-ALERT_TO_M5_HOST   = '100.85.18.10'
-ALERT_TO_M5_PORT   = 9000
+MAVLINK_URL        = os.environ.get('MAVLINK_URL', 'udp:0.0.0.0:14551')
+ALERT_TO_M5_HOST   = os.environ.get('M5_HOST', '100.85.18.10')
+ALERT_TO_M5_PORT   = int(os.environ.get('M5_PORT', 9000))
 ATTACK_NOTIFY_PORT = 9001
 LATENCY_LOG_PATH       = os.path.join(PROJECT_ROOT, 'logs', 'latency_log.json')
 UNKNOWN_ANOMALIES_PATH = os.path.join(PROJECT_ROOT, 'data', 'unknown_anomalies.pkl')
@@ -60,12 +60,12 @@ WINDOW_SEC = 1.0
 STEP_SEC   = 0.5
 EXPECTED_MSG_INTERVAL_MS = 250
 
-ALERT_COOLDOWN_SEC      = 3.0
-CLEAR_GRACE_SEC         = 5.0
-STARTUP_GRACE_SEC       = 4.0
-CONFIRM_WINDOWS         = 2
-EKF_CONSECUTIVE_SPOOF   = 2
-FAILSAFE_DISPATCH_COOLDOWN_SEC = 3.0
+ALERT_COOLDOWN_SEC      = 2.0
+CLEAR_GRACE_SEC         = 4.0
+STARTUP_GRACE_SEC       = 3.0
+CONFIRM_WINDOWS         = 1
+EKF_CONSECUTIVE_SPOOF   = 1
+FAILSAFE_DISPATCH_COOLDOWN_SEC = 2.0
 
 # =====================================================
 # STARTUP
@@ -490,25 +490,15 @@ def main():
 
                         confirmed = []
                         for atype, conf in rule_alerts:
-                            consecutive_alert_counts[atype] = \
-                                consecutive_alert_counts.get(atype, 0) + 1
-                            # Discrete single-shot attacks (arm, mode, param, spam) confirm immediately (1 window)
-                            req_win = 1 if any(k in atype for k in ('ARM', 'MODE', 'PARAM', 'SPAM', 'COMMAND', 'TAKEOFF', 'LAND')) else CONFIRM_WINDOWS
-                            if consecutive_alert_counts[atype] >= req_win:
-                                confirmed.append((atype, conf))
+                            consecutive_alert_counts[atype] = consecutive_alert_counts.get(atype, 0) + 1
+                            confirmed.append((atype, conf))
 
                         if confirmed:
                             best = max(confirmed, key=lambda x: x[1])
                             emit_alert(master, best[0], best[1], 'rule', features)
-                        elif rule_alerts:
-                            pending = ', '.join(
-                                f"{a}({consecutive_alert_counts[a]}/{CONFIRM_WINDOWS})"
-                                for a, _ in rule_alerts
-                            )
-                            print(f"[M3] 🕒 Pending confirmation: {pending}")
                         elif ml_pred == -1:
                             conf = min(1.0, max(0.0, (0.1 - ml_score) / 0.2))
-                            if conf >= 0.70:
+                            if conf >= 0.50:
                                 emit_alert(master, 'UNKNOWN_ANOMALY', conf, 'ml', features)
                             elif msg_count % 40 == 0:
                                 print(f"[M3] ℹ️  ML flag (below gate) "

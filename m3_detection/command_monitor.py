@@ -77,6 +77,8 @@ class CommandMonitor:
         self.arm_change_times = deque(maxlen=200)
         self.param_change_times = deque(maxlen=200)
         self.command_ack_times = deque(maxlen=500)
+        self.land_change_times = deque(maxlen=200)
+        self.takeoff_cmd_times = deque(maxlen=200)
 
         # Continuous samples (need value, not just timestamp)
         self.yaw_samples = deque(maxlen=500)   # [(t, yawspeed), ...]
@@ -91,7 +93,9 @@ class CommandMonitor:
         for q in (self.mode_change_times,
                   self.arm_change_times,
                   self.param_change_times,
-                  self.command_ack_times):
+                  self.command_ack_times,
+                  self.land_change_times,
+                  self.takeoff_cmd_times):
             while q and q[0] < cutoff:
                 q.popleft()
 
@@ -132,6 +136,8 @@ class CommandMonitor:
                 self._mode_transitions_seen += 1
                 if self._mode_transitions_seen > self.mode_grace:
                     self.mode_change_times.append(now)
+                    if mode == 9:  # ArduCopter LAND mode
+                        self.land_change_times.append(now)
                 else:
                     print(f"[CmdMonitor] Mode change #{self._mode_transitions_seen} "
                           f"treated as expected pre-flight setup — not flagged")
@@ -170,6 +176,9 @@ class CommandMonitor:
         # -------- COMMAND_ACK: drone echoing incoming commands --------
         elif msg_type == 'COMMAND_ACK':
             self.command_ack_times.append(now)
+            cmd_id = getattr(msg, 'command', None)
+            if cmd_id == 22:  # MAV_CMD_NAV_TAKEOFF
+                self.takeoff_cmd_times.append(now)
 
         self._trim(now)
 
@@ -196,4 +205,6 @@ class CommandMonitor:
             'cmd_ack_rate':       len(self.command_ack_times),
             'cmd_yaw_rate_max':   yaw_rate_max,
             'cmd_yaw_jump':       yaw_jump,
+            'cmd_land_changes':   len(self.land_change_times),
+            'cmd_takeoff_changes': len(self.takeoff_cmd_times),
         }

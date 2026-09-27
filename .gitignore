@@ -6,10 +6,11 @@ __pycache__/
 .venv/
 venv/
 
-# Security & Keys (NEVER COMMIT)
+# Security & Keys (Do not commit individual private keys, but retain shared pipeline key)
 keys/
 *.pem
 *.key
+!keys/pipeline.key
 .env
 
 # Heavy Data & Model Weights

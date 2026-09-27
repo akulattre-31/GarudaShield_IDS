@@ -154,9 +154,13 @@ def apply_rules(features):
     # ==================================================================
     # 7) COMMAND-LEVEL attacks
     # ==================================================================
+    if features.get('cmd_takeoff_changes', 0) > 0 or (features.get('vz_jump', 0.0) > 2.5 and features.get('vertical_speed_mean', 0.0) < -1.5):
+        alerts.append(('FORCED_TAKEOFF', 0.95))
+    if features.get('cmd_land_changes', 0) > 0:
+        alerts.append(('ROGUE_LAND', 0.95))
     if features.get('cmd_arm_changes', 0) > 0:
         alerts.append(('ARM_DISARM_ATTACK', 0.90))
-    if features.get('cmd_mode_changes', 0) > 0:
+    if features.get('cmd_mode_changes', 0) > 0 and features.get('cmd_land_changes', 0) == 0:
         alerts.append(('MODE_CHANGE_ATTACK', 0.90))
     if features.get('cmd_param_changes', 0) >= 1:
         alerts.append(('PARAM_CHANGE_ATTACK', 0.85))

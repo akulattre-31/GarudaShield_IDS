@@ -158,16 +158,18 @@ def apply_rules(features):
         alerts.append(('ARM_DISARM_ATTACK', 0.90))
     if features.get('cmd_mode_changes', 0) > 0:
         alerts.append(('MODE_CHANGE_ATTACK', 0.90))
-    if features.get('cmd_param_changes', 0) >= 3:
+    if features.get('cmd_param_changes', 0) >= 1:
         alerts.append(('PARAM_CHANGE_ATTACK', 0.85))
-    if features.get('cmd_ack_rate', 0) > 20:
+    if features.get('cmd_ack_rate', 0) >= 8:
         alerts.append(('COMMAND_SPAM', 0.85))
-    if features.get('cmd_yaw_rate_max', 0.0) > 3.0:
+    if features.get('cmd_yaw_rate_max', 0.0) > 1.2 or features.get('cmd_yaw_jump', 0.0) > 1.0:
         alerts.append(('YAW_HIJACK', 0.85))
 
     # ==================================================================
-    # 8) Jamming
+    # 8) POSITION OFFSET & Jamming
     # ==================================================================
+    if features.get('gps_jump_m', 0.0) > 3.0:
+        alerts.append(('POSITION_OFFSET', 0.85))
     if features.get('packet_loss_rate', 0.0) > _th('packet_loss_rate'):
         alerts.append(('GPS_JAMMING', 0.80))
 

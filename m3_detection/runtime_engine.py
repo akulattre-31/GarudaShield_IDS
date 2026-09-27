@@ -60,12 +60,12 @@ WINDOW_SEC = 1.0
 STEP_SEC   = 0.5
 EXPECTED_MSG_INTERVAL_MS = 250
 
-ALERT_COOLDOWN_SEC      = 10.0
-CLEAR_GRACE_SEC         = 6.0
-STARTUP_GRACE_SEC       = 5.0
-CONFIRM_WINDOWS         = 3
-EKF_CONSECUTIVE_SPOOF   = 3
-FAILSAFE_DISPATCH_COOLDOWN_SEC = 15.0
+ALERT_COOLDOWN_SEC      = 3.0
+CLEAR_GRACE_SEC         = 5.0
+STARTUP_GRACE_SEC       = 4.0
+CONFIRM_WINDOWS         = 2
+EKF_CONSECUTIVE_SPOOF   = 2
+FAILSAFE_DISPATCH_COOLDOWN_SEC = 3.0
 
 # =====================================================
 # STARTUP
@@ -492,7 +492,9 @@ def main():
                         for atype, conf in rule_alerts:
                             consecutive_alert_counts[atype] = \
                                 consecutive_alert_counts.get(atype, 0) + 1
-                            if consecutive_alert_counts[atype] >= CONFIRM_WINDOWS:
+                            # Discrete single-shot attacks (arm, mode, param, spam) confirm immediately (1 window)
+                            req_win = 1 if any(k in atype for k in ('ARM', 'MODE', 'PARAM', 'SPAM', 'COMMAND', 'TAKEOFF', 'LAND')) else CONFIRM_WINDOWS
+                            if consecutive_alert_counts[atype] >= req_win:
                                 confirmed.append((atype, conf))
 
                         if confirmed:
@@ -506,7 +508,7 @@ def main():
                             print(f"[M3] 🕒 Pending confirmation: {pending}")
                         elif ml_pred == -1:
                             conf = min(1.0, max(0.0, (0.1 - ml_score) / 0.2))
-                            if conf >= 0.75:
+                            if conf >= 0.70:
                                 emit_alert(master, 'UNKNOWN_ANOMALY', conf, 'ml', features)
                             elif msg_count % 40 == 0:
                                 print(f"[M3] ℹ️  ML flag (below gate) "

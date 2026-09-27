@@ -186,12 +186,72 @@ async def link_monitor_loop():
         except Exception as e:
             print("[UI Bridge] Link monitor error:", e)
 
-        await asyncio.sleep(0.5)
+async def mavlink_stream_loop(port: int):
+    """
+    Direct MAVLink telemetry ingress from SITL / MAVProxy (e.g. ports 14550, 14551).
+    Synchronizes physical drone motion directly from the simulator.
+    """
+    global last_udp_time
+    loop = asyncio.get_running_loop()
+    try:
+        from pymavlink import mavutil
+        conn = mavutil.mavlink_connection(f"udpin:0.0.0.0:{port}")
+        print(f"[UI Bridge] 🛰️ MAVLink listener online on UDP {port} (ready for SITL/MAVProxy)...")
+    except Exception as e:
+        print(f"[UI Bridge] MAVLink listener port {port} note: {e}")
+        return
+
+    while True:
+        try:
+            msg = await loop.run_in_executor(None, lambda: conn.recv_match(
+                type=['GLOBAL_POSITION_INT', 'VFR_HUD', 'ATTITUDE', 'HEARTBEAT'],
+                blocking=True,
+                timeout=0.25
+            ))
+            if msg:
+                mtype = msg.get_type()
+                if mtype == 'GLOBAL_POSITION_INT':
+                    last_known_telemetry['latitude'] = msg.lat / 1e7
+                    last_known_telemetry['longitude'] = msg.lon / 1e7
+                    last_known_telemetry['altitude_m'] = round(msg.relative_alt / 1000.0, 1)
+                    vx = msg.vx / 100.0
+                    vy = msg.vy / 100.0
+                    last_known_telemetry['speed_ms'] = round(math.sqrt(vx**2 + vy**2), 1)
+                    last_known_telemetry['vx'] = round(vx, 2)
+                    last_known_telemetry['vy'] = round(vy, 2)
+                    if hasattr(msg, 'hdg'):
+                        last_known_telemetry['heading'] = round(msg.hdg / 100.0, 1)
+                    last_udp_time = time.time()
+                elif mtype == 'VFR_HUD':
+                    last_known_telemetry['speed_ms'] = round(msg.groundspeed, 1)
+                    last_known_telemetry['altitude_m'] = round(msg.alt, 1)
+                    if hasattr(msg, 'heading'):
+                        last_known_telemetry['heading'] = round(msg.heading, 1)
+                    last_udp_time = time.time()
+                elif mtype == 'HEARTBEAT':
+                    last_udp_time = time.time()
+
+                if mtype in ('GLOBAL_POSITION_INT', 'VFR_HUD'):
+                    telemetry_frame = {
+                        "telemetry": dict(last_known_telemetry),
+                        "kinematic_residual": 1.2,
+                        "system_status": "NOMINAL",
+                        "link_connected": True,
+                        "link_status": "STREAM_ACTIVE",
+                        "new_incident": False
+                    }
+                    for ws in list(active_websockets):
+                        asyncio.create_task(ws.send_json(telemetry_frame))
+        except Exception:
+            await asyncio.sleep(0.1)
 
 @app.on_event("startup")
 async def startup_event():
     tasks.append(asyncio.create_task(secure_receiver_loop()))
     tasks.append(asyncio.create_task(link_monitor_loop()))
+    # Listen on standard MAVLink telemetry ports (14550 for GCS, 14551 for team sync)
+    tasks.append(asyncio.create_task(mavlink_stream_loop(14550)))
+    tasks.append(asyncio.create_task(mavlink_stream_loop(14551)))
 
 @app.on_event("shutdown")
 async def shutdown_event():

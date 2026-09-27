@@ -65,7 +65,7 @@ CLEAR_GRACE_SEC         = 4.0
 STARTUP_GRACE_SEC       = 3.0
 CONFIRM_WINDOWS         = 1
 EKF_CONSECUTIVE_SPOOF   = 1
-FAILSAFE_DISPATCH_COOLDOWN_SEC = 2.0
+FAILSAFE_DISPATCH_COOLDOWN_SEC = 0.5
 
 # =====================================================
 # STARTUP

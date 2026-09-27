@@ -3,7 +3,7 @@
    Liquid Glassmorphism Design System & Cybernetic Aerospace Styles
    ══════════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Rajdhani:wght@500;600;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@700;800&display=swap');
 
 :root {
     --brand-bg: #040813;
@@ -439,6 +439,40 @@ body {
     background: linear-gradient(135deg, rgba(14, 26, 54, 0.85) 0%, rgba(10, 18, 38, 0.75) 100%);
     transform: translateX(3px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 14px var(--threat-color, #00f0ff);
+}
+
+/* Hover-Only Threat Definition Accordion */
+.threat-desc {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, margin 0.25s ease;
+}
+
+.threat-row:hover .threat-desc {
+    max-height: 80px;
+    opacity: 1;
+    margin-top: 4px !important;
+    margin-bottom: 8px !important;
+}
+
+/* Map Dot Hover Tooltip */
+.tactical-map-tooltip {
+    background: rgba(4, 8, 19, 0.94) !important;
+    border: 1px solid rgba(0, 240, 255, 0.6) !important;
+    border-radius: 8px !important;
+    color: #ffffff !important;
+    font-family: 'Rajdhani', 'Space Grotesk', sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.85) !important;
+    padding: 4px 9px !important;
+}
+.tactical-map-tooltip::before {
+    border-top-color: rgba(4, 8, 19, 0.94) !important;
 }
 
 .threat-row.active-threat, .threat-card.intercepting {

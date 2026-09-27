@@ -3,32 +3,7 @@
 // Team Garuda Kavach | Tactical M5 Dashboard Client Application
 // ══════════════════════════════════════════════════════════════════
 
-// ── 1. HUMAN LOCAL CLOCK (Clean, Non-Robotic, NO Zulu) ────────────
-function updateLocalClock() {
-    const clockEl = document.getElementById('local-clock');
-    const tzEl = document.getElementById('local-tz');
-    if (!clockEl) return;
-
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    clockEl.textContent = `${hours}:${minutes}:${seconds}`;
-
-    if (tzEl) {
-        try {
-            const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop().replace('_', ' ');
-            tzEl.textContent = tzName.toUpperCase();
-        } catch (e) {
-            tzEl.textContent = 'LOCAL';
-        }
-    }
-}
-updateLocalClock();
-setInterval(updateLocalClock, 1000);
-
-
-// ── 2. ATTACK COLOR THEMES & SPECIFICATIONS ───────────────────────
+// ── 1. ATTACK COLOR THEMES & SPECIFICATIONS ───────────────────────
 const ATTACK_THEMES = {
     GPS_SPOOFING: {
         id: 'gps',
@@ -69,17 +44,37 @@ const ATTACK_THEMES = {
         bgAlpha: 'rgba(16, 185, 129, 0.15)',
         rowId: 'threat-drift',
         countermeasure: 'EKF Chi-Square Decoupling Failsafe'
+    },
+    UNMENTIONED_ATTACK: {
+        id: 'unmentioned',
+        name: 'Unclassified Anomaly',
+        color: '#080c16',        // Tactical Obsidian Black
+        accentBorder: '#ffffff',
+        bgAlpha: 'rgba(8, 12, 22, 0.85)',
+        rowId: null,
+        countermeasure: 'Zero-Trust Protocol Isolation & Autonomous Guard'
     }
 };
 
 function resolveAttackTheme(typeStr) {
-    const raw = (typeStr || '').toUpperCase();
+    const raw = (typeStr || '').toUpperCase().trim();
     if (raw.includes('GPS') || raw.includes('SPOOF')) return ATTACK_THEMES.GPS_SPOOFING;
     if (raw.includes('FLOOD') || raw.includes('DOS') || raw.includes('RATE')) return ATTACK_THEMES.MAVLINK_FLOOD;
     if (raw.includes('INJECTION') || raw.includes('ROGUE') || raw.includes('CMD')) return ATTACK_THEMES.COMMAND_INJECTION;
     if (raw.includes('REPLAY') || raw.includes('NONCE') || raw.includes('STALE')) return ATTACK_THEMES.REPLAY_ATTACK;
     if (raw.includes('SENSOR') || raw.includes('DRIFT') || raw.includes('ANOMALY') || raw.includes('EKF')) return ATTACK_THEMES.SENSOR_ANOMALY;
-    return ATTACK_THEMES.GPS_SPOOFING;
+    
+    // For any unmentioned/custom attack: Return Tactical Obsidian Black theme
+    const formattedName = typeStr ? typeStr.replace(/_/g, ' ') : 'Unclassified Threat';
+    return {
+        id: 'unmentioned',
+        name: formattedName,
+        color: '#080c16',
+        accentBorder: '#ffffff',
+        bgAlpha: 'rgba(8, 12, 22, 0.85)',
+        rowId: null,
+        countermeasure: 'Zero-Trust Protocol Isolation & Autonomous Guard'
+    };
 }
 
 
@@ -312,8 +307,121 @@ let incidentLog = [];
 let prevAlt = 0, prevSpd = 0;
 let lastKnownLat = -35.363262;
 let lastKnownLon = 149.165237;
-let lastKnownAlt = 150.0;
+let lastKnownAlt = 0.0;
 let isStreamConnected = false;
+let lastPacketTimestamp = 0;
+
+function setDisconnectedUI() {
+    isStreamConnected = false;
+    const icon = document.getElementById('status-icon');
+    const statusText = document.getElementById('status-text');
+    const subStatusText = document.getElementById('sub-status-text');
+    const mapStatus = document.getElementById('map-drone-status');
+    const cubeTitle = document.getElementById('cube-status-title');
+    const cubeZone = document.getElementById('cube-zone');
+    const cubeAlt = document.getElementById('cube-alt');
+    const banner = document.getElementById('status-banner');
+    const pingDot = document.getElementById('conn-ping-dot');
+
+    if (icon) icon.className = 'w-3 h-3 bg-rose-500 rounded-full animate-pulse';
+    if (statusText) {
+        statusText.textContent = 'NOT CONNECTED';
+        statusText.className = 'font-tech text-xs font-bold tracking-widest text-rose-400 uppercase';
+    }
+    if (subStatusText) {
+        subStatusText.textContent = 'SIMULATOR OFFLINE';
+    }
+    if (pingDot) pingDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+
+    if (mapStatus) {
+        mapStatus.textContent = 'SIMULATOR DISCONNECTED';
+        mapStatus.className = 'text-rose-400 font-semibold font-tech tracking-wider';
+    }
+    if (cubeTitle) {
+        cubeTitle.textContent = 'DRONE-01 // OFFLINE';
+    }
+    if (cubeZone) {
+        cubeZone.textContent = 'STANDBY // GROUND';
+        cubeZone.style.color = '#8295b5';
+    }
+    if (cubeAlt) {
+        cubeAlt.textContent = '0.0m';
+    }
+
+    if (banner) {
+        banner.style.borderBottomColor = 'rgba(244, 63, 94, 0.25)';
+        banner.style.boxShadow = '';
+    }
+    document.body.classList.remove('critical-threat-mode');
+
+    // Strictly 0.0 altitude and speed when drone is off
+    const altVal = document.getElementById('alt-val');
+    if (altVal) altVal.innerHTML = '0.0 m';
+    const spdVal = document.getElementById('spd-val');
+    if (spdVal) spdVal.innerHTML = '0.0 m/s';
+    const latVal = document.getElementById('lat-val');
+    if (latVal) latVal.textContent = '—';
+
+    updateSegmentBar('alt-segments', 0);
+    updateSegmentBar('spd-segments', 0);
+
+    const syncBadge = document.getElementById('telemetry-sync-badge');
+    if (syncBadge) {
+        syncBadge.textContent = 'STANDBY';
+        syncBadge.className = 'px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[9px] tracking-wider uppercase font-semibold';
+    }
+    const mavStatus = document.getElementById('mavlink-status');
+    if (mavStatus) {
+        mavStatus.textContent = 'IDLE';
+        mavStatus.className = 'text-slate-400 font-semibold';
+    }
+}
+
+function setConnectedUI(tel) {
+    isStreamConnected = true;
+    const icon = document.getElementById('status-icon');
+    const statusText = document.getElementById('status-text');
+    const subStatusText = document.getElementById('sub-status-text');
+    const mapStatus = document.getElementById('map-drone-status');
+    const cubeTitle = document.getElementById('cube-status-title');
+    const pingDot = document.getElementById('conn-ping-dot');
+
+    if (icon) icon.className = 'w-3 h-3 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_#10b981]';
+    if (statusText) {
+        statusText.textContent = 'CONNECTED';
+        statusText.className = 'font-tech text-xs font-bold tracking-widest text-emerald-400 uppercase';
+    }
+    if (subStatusText) {
+        subStatusText.textContent = 'SIMULATOR ONLINE';
+    }
+    if (pingDot) pingDot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]';
+
+    if (mapStatus) {
+        mapStatus.textContent = 'AIRBORNE ACTIVE';
+        mapStatus.className = 'text-cyan-300 font-semibold font-tech tracking-wider';
+    }
+    if (cubeTitle) {
+        cubeTitle.textContent = 'DRONE-01 // LIVE';
+    }
+
+    const syncBadge = document.getElementById('telemetry-sync-badge');
+    if (syncBadge) {
+        syncBadge.textContent = 'TELEMETRY SYNCED';
+        syncBadge.className = 'px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-emerald-400 text-[9px] tracking-wider uppercase font-semibold';
+    }
+    const mavStatus = document.getElementById('mavlink-status');
+    if (mavStatus) {
+        mavStatus.textContent = 'STREAMING';
+        mavStatus.className = 'text-emerald-400 font-semibold';
+    }
+}
+
+// Client-Side Watchdog: Auto-detect simulator disconnect without needing page refresh!
+setInterval(() => {
+    if (Date.now() - lastPacketTimestamp > 2500 && isStreamConnected) {
+        setDisconnectedUI();
+    }
+}, 800);
 
 ws.onopen = function() {
     console.log('[Garuda Kavach] WebSocket connected to IDS bridge');
@@ -337,87 +445,25 @@ ws.onmessage = function(event) {
     }
 
     const tel = data.telemetry || {};
-    const linkConnected = data.link_connected !== undefined ? data.link_connected : true;
-    isStreamConnected = linkConnected;
+    const linkConnected = Boolean(data.link_connected && data.system_status !== 'LINK_SEVERED');
 
-    // ── Update Connection Link Status in Header ──
-    const banner = document.getElementById('status-banner');
-    const icon = document.getElementById('status-icon');
-    const statusText = document.getElementById('status-text');
-    const subStatusText = document.getElementById('sub-status-text');
-    const mapStatus = document.getElementById('map-drone-status');
-    const cubeTitle = document.getElementById('cube-status-title');
-
-    if (!linkConnected || data.system_status === 'LINK_SEVERED') {
-        // Stream disconnected / waiting for Blue Team: Stop drone and show status!
-        if (icon) {
-            icon.className = 'w-3.5 h-3.5 bg-amber-400 rounded-full animate-pulse';
-            icon.style.backgroundColor = '';
-        }
-        if (statusText) {
-            statusText.textContent = 'TELEMETRY LINK SEVERED // WAITING FOR INGRESS';
-            statusText.style.color = '#ff9900';
-        }
-        if (subStatusText) {
-            subStatusText.textContent = 'Awaiting verified 20Hz packets on UDP 9000...';
-        }
-        if (mapStatus) {
-            mapStatus.textContent = 'STREAM INACTIVE — DRONE STATIONARY';
-            mapStatus.className = 'text-amber-400 font-semibold';
-            mapStatus.style.color = '';
-        }
-        if (cubeTitle) {
-            cubeTitle.textContent = 'DRONE-01 // STATIONARY';
-        }
-        const cubeZone = document.getElementById('cube-zone');
-        if (cubeZone) {
-            cubeZone.textContent = 'STATIONARY // HOVER';
-            cubeZone.style.color = '#ff9900';
-        }
-        if (banner) {
-            banner.style.borderBottomColor = 'rgba(255, 153, 0, 0.35)';
-            banner.style.boxShadow = '';
-        }
-        document.body.classList.remove('critical-threat-mode');
-
-        const spdVal = document.getElementById('spd-val');
-        if (spdVal) spdVal.innerHTML = '0.0 m/s';
-        updateSegmentBar('spd-segments', 0);
-    } else if (data.system_status === 'NOMINAL' || data.system_status === 'STREAM_ACTIVE') {
-        if (icon) icon.className = 'w-3.5 h-3.5 bg-brand-accent rounded-full animate-pulse glow-accent';
-        if (statusText) {
-            statusText.textContent = 'Sentinel Shield Online';
-            statusText.style.color = '#67e8f9';
-        }
-        if (subStatusText) {
-            subStatusText.textContent = 'Ingress Port 9000 // Verified HMAC UDP';
-        }
-        if (mapStatus) {
-            mapStatus.textContent = 'PATROLLING SECTOR A';
-            mapStatus.className = 'text-cyan-300 font-semibold';
-        }
-        if (cubeTitle) {
-            cubeTitle.textContent = 'DRONE-01 // ACTIVE';
-        }
+    if (linkConnected) {
+        lastPacketTimestamp = Date.now();
+        setConnectedUI(tel);
+    } else {
+        setDisconnectedUI();
     }
 
     // ── Update Coordinates ──
     const lat = tel.latitude !== undefined ? tel.latitude : lastKnownLat;
     const lon = tel.longitude !== undefined ? tel.longitude : lastKnownLon;
-    const alt = tel.altitude_m !== undefined ? tel.altitude_m : lastKnownAlt;
-    const spd = linkConnected ? (tel.speed_ms !== undefined ? tel.speed_ms : prevSpd) : 0.0;
+    // When offline, altitude is strictly 0.0m
+    const alt = linkConnected ? (tel.altitude_m !== undefined ? tel.altitude_m : 0.0) : 0.0;
+    const spd = linkConnected ? (tel.speed_ms !== undefined ? tel.speed_ms : 0.0) : 0.0;
 
     lastKnownLat = lat;
     lastKnownLon = lon;
     lastKnownAlt = alt;
-
-    // ── Update Corner HUD Overlay on the Map ──
-    const latDisp = document.getElementById('lat-display');
-    const lonDisp = document.getElementById('lon-display');
-    const altDisp = document.getElementById('map-alt-hud');
-    if (latDisp) latDisp.textContent = `${lat.toFixed(6)}°`;
-    if (lonDisp) lonDisp.textContent = `${lon.toFixed(6)}°`;
-    if (altDisp) altDisp.textContent = `${alt.toFixed(1)}m`;
 
     // ── Update Beside-Drone 3D Cube HUD ──
     const cubeLat = document.getElementById('cube-lat');
@@ -464,35 +510,41 @@ ws.onmessage = function(event) {
     prevSpd = spd;
 
     const altVal = document.getElementById('alt-val');
-    if (altVal) altVal.innerHTML = `<span class="text-cyan-400 text-xs">${altTrend}</span> ${alt.toFixed(1)} m`;
+    if (altVal) {
+        altVal.innerHTML = linkConnected ? `<span class="text-cyan-400 text-xs">${altTrend}</span> ${alt.toFixed(1)} m` : '0.0 m';
+    }
 
     const spdVal = document.getElementById('spd-val');
-    if (spdVal && linkConnected) {
-        spdVal.innerHTML = `<span class="text-cyan-400 text-xs">${spdTrend}</span> ${spd.toFixed(1)} m/s`;
+    if (spdVal) {
+        spdVal.innerHTML = linkConnected ? `<span class="text-cyan-400 text-xs">${spdTrend}</span> ${spd.toFixed(1)} m/s` : '0.0 m/s';
     }
 
-    if (tel.latency_ms !== undefined) {
-        const latVal = document.getElementById('lat-val');
-        if (latVal) latVal.textContent = tel.latency_ms;
+    const latVal = document.getElementById('lat-val');
+    if (latVal) {
+        latVal.textContent = linkConnected ? (tel.latency_ms || 12) : '—';
     }
 
-    updateSegmentBar('alt-segments', Math.min((alt / 200) * 100, 100));
     if (linkConnected) {
+        updateSegmentBar('alt-segments', Math.min((alt / 200) * 100, 100));
         updateSegmentBar('spd-segments', Math.min((spd / 25) * 100, 100));
+    } else {
+        updateSegmentBar('alt-segments', 0);
+        updateSegmentBar('spd-segments', 0);
     }
 
     // ── Avionics Health ──
-    if (tel.cpu_load_pct !== undefined) {
-        const cpuTxt = document.getElementById('cpu-val-text');
-        if (cpuTxt) cpuTxt.textContent = `${tel.cpu_load_pct.toFixed(0)}%`;
-        updateCpuGraph(tel.cpu_load_pct);
-    }
-    if (tel.ram_load_pct !== undefined) {
-        const ramTxt = document.getElementById('ram-val-text');
-        const ramFill = document.getElementById('ram-fill');
-        if (ramTxt) ramTxt.textContent = `${tel.ram_load_pct.toFixed(0)}%`;
-        if (ramFill) ramFill.style.width = `${tel.ram_load_pct}%`;
-    }
+    const cpuVal = tel.cpu_load_pct !== undefined ? tel.cpu_load_pct : (linkConnected ? 20 : 0);
+    const ramVal = tel.ram_load_pct !== undefined ? tel.ram_load_pct : (linkConnected ? 35 : 0);
+
+    const cpuTxt = document.getElementById('cpu-val-text');
+    if (cpuTxt) cpuTxt.textContent = `${cpuVal.toFixed(0)}%`;
+    const cpuFill = document.getElementById('cpu-fill');
+    if (cpuFill) cpuFill.style.width = `${Math.min(Math.max(cpuVal, 0), 100)}%`;
+
+    const ramTxt = document.getElementById('ram-val-text');
+    const ramFill = document.getElementById('ram-fill');
+    if (ramTxt) ramTxt.textContent = `${ramVal.toFixed(0)}%`;
+    if (ramFill) ramFill.style.width = `${ramVal}%`;
 
     // ── Kinematic Residual & Anomaly Graph ──
     const residual = data.kinematic_residual !== undefined ? data.kinematic_residual : 1.2;
@@ -520,13 +572,7 @@ ws.onmessage = function(event) {
 
 ws.onclose = function() {
     console.warn('[Garuda Kavach] Telemetry WebSocket connection closed');
-    const icon = document.getElementById('status-icon');
-    const txt = document.getElementById('status-text');
-    if (icon) icon.className = 'w-3.5 h-3.5 bg-brand-danger rounded-full animate-ping';
-    if (txt) {
-        txt.textContent = 'IDS BRIDGE DISCONNECTED';
-        txt.style.color = '#ff2a55';
-    }
+    setDisconnectedUI();
 };
 
 
@@ -705,10 +751,16 @@ function recordIncident(details, lat, lon) {
         dropLon = dropLon + Math.cos(angle) * radiusDeg;
     }
 
+    const isDark = (theme.color === '#080c16' || theme.id === 'unmentioned');
+    const beaconColor = isDark ? '#ffffff' : theme.color;
+    const coreBg = isDark ? '#080c16' : theme.color;
+    const coreBorder = isDark ? '2px solid #ffffff' : '2px solid #ffffff';
+    const coreShadow = isDark ? '0 0 12px #ffffff' : `0 0 10px ${theme.color}`;
+
     const dotHtml = `
         <div style="position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
-            <div style="position:absolute;width:100%;height:100%;border-radius:50%;background:${theme.color};opacity:0.65;animation:attack-beacon 1.8s ease-out infinite;"></div>
-            <div style="width:13px;height:13px;border-radius:50%;background:${theme.color};border:2px solid #ffffff;box-shadow:0 0 10px ${theme.color};z-index:2;"></div>
+            <div style="position:absolute;width:100%;height:100%;border-radius:50%;background:${beaconColor};opacity:0.75;animation:attack-beacon 1.8s ease-out infinite;"></div>
+            <div style="width:13px;height:13px;border-radius:50%;background:${coreBg};border:${coreBorder};box-shadow:${coreShadow};z-index:2;"></div>
         </div>
     `;
     const dotIcon = L.divIcon({
@@ -721,13 +773,13 @@ function recordIncident(details, lat, lon) {
     const popupHtml = `
         <div class="attack-popup-card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">
-                <span class="report-pill" style="color:${theme.color};border-color:${theme.color}50;background:${theme.color}20">
+                <span class="report-pill" style="color:${isDark ? '#38bdf8' : theme.color};border-color:${isDark ? '#38bdf8' : theme.color}50;background:${isDark ? '#38bdf8' : theme.color}20">
                     REPORT #${logIndex}
                 </span>
                 <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;">${timeStr} Local</span>
             </div>
-            <div style="font-weight:800;color:${theme.color};font-size:12px;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;">
-                ${theme.name}
+            <div style="font-weight:800;color:${isDark ? '#ffffff' : theme.color};font-size:12px;margin-bottom:4px;font-family:'Rajdhani','Space Grotesk',sans-serif;letter-spacing:0.04em;">
+                ${theme.name.toUpperCase()}
             </div>
             <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">
                 <div><strong>Confidence:</strong> <span style="color:#00f0ff;">${confPct}</span></div>
@@ -743,6 +795,18 @@ function recordIncident(details, lat, lon) {
 
     const marker = L.marker([dropLat, dropLon], { icon: dotIcon }).addTo(map);
     marker.bindPopup(popupHtml);
+
+    // Hover Tooltip: Instantly shows Log No and Attack Name on cursor hover
+    marker.bindTooltip(`
+        <div style="font-family:'Rajdhani','Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:${isDark ? '#38bdf8' : theme.color};letter-spacing:0.04em;">
+            Report #${logIndex} &bull; ${theme.name}
+        </div>
+    `, {
+        permanent: false,
+        direction: 'top',
+        className: 'tactical-map-tooltip',
+        offset: [0, -10]
+    });
 
     mapMarkerObj = {
         marker,

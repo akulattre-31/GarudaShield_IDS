@@ -127,11 +127,11 @@ base_lat = -35.363262
 base_lon = 149.165237
 
 last_known_telemetry = {
-    "altitude_m": 150.0,
+    "altitude_m": 0.0,
     "speed_ms": 0.0,
-    "ram_load_pct": 38.0,
-    "latency_ms": 14,
-    "cpu_load_pct": 28.0,
+    "ram_load_pct": 32.0,
+    "latency_ms": 0,
+    "cpu_load_pct": 18.0,
     "latitude": base_lat,
     "longitude": base_lon,
     "vx": 0.0,
@@ -324,9 +324,11 @@ async def link_monitor_loop():
             now = time.time()
             if now - last_udp_time >= 3.0:
                 # Telemetry connection lost / waiting for SITL or Blue Team stream
+                last_known_telemetry["altitude_m"] = 0.0
                 last_known_telemetry["speed_ms"] = 0.0
                 last_known_telemetry["vx"] = 0.0
                 last_known_telemetry["vy"] = 0.0
+                last_known_telemetry["latency_ms"] = 0
                 global current_threat_status
                 current_threat_status = "NOMINAL"
 
@@ -335,7 +337,7 @@ async def link_monitor_loop():
                     "kinematic_residual": 1.2,
                     "system_status": "LINK_SEVERED",
                     "link_connected": False,
-                    "link_status": "TELEMETRY LINK SEVERED // WAITING FOR INGRESS (UDP 69 / 14550 / 9000)",
+                    "link_status": "DISCONNECTED // SIMULATOR OFFLINE",
                     "new_incident": False
                 }
 
@@ -362,13 +364,13 @@ async def websocket_endpoint(websocket: WebSocket):
     active_websockets.add(websocket)
     try:
         # Send immediate initial state
-        initial_status = "STREAM_ACTIVE" if (time.time() - last_udp_time < 3.0) else "LINK_SEVERED"
+        is_connected = (time.time() - last_udp_time < 3.0) and (last_udp_time > 0)
         await websocket.send_json({
             "telemetry": dict(last_known_telemetry),
             "kinematic_residual": 1.2,
-            "system_status": "NOMINAL" if initial_status == "STREAM_ACTIVE" else "LINK_SEVERED",
-            "link_connected": (time.time() - last_udp_time < 3.0),
-            "link_status": "STREAM_ACTIVE" if (time.time() - last_udp_time < 3.0) else "TELEMETRY LINK SEVERED // WAITING FOR BLUE TEAM INGRESS (UDP 9000)",
+            "system_status": "NOMINAL" if is_connected else "LINK_SEVERED",
+            "link_connected": is_connected,
+            "link_status": "STREAM_ACTIVE" if is_connected else "DISCONNECTED // SIMULATOR OFFLINE",
             "new_incident": False
         })
 

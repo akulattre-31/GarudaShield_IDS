@@ -54,6 +54,17 @@ STEP_SEC = 0.5
 ALERT_COOLDOWN_SEC = 3.0
 EXPECTED_MSG_INTERVAL_MS = 250
 
+# Don't evaluate rule/ML alerts during the first few seconds after connecting
+# — EKF and motion-consistency stats haven't stabilized yet, so cold-start
+# transients (e.g. a one-off GPS_FREEZE_ATTACK right at boot) get skipped.
+STARTUP_GRACE_SEC = 5.0
+
+# Require the SAME attack_type to appear in this many consecutive detection
+# windows before it's treated as confirmed and actually dispatched. Filters
+# out single noisy windows; a real sustained attack will still hit this
+# easily since it keeps recurring.
+CONFIRM_WINDOWS = 3
+
 # =====================================================
 # STARTUP
 # =====================================================
@@ -76,7 +87,8 @@ rate_limiter = RateLimiter(max_hz=1000, window_sec=1.0)
 seq_validator = SequenceValidator(expected_sysid=1)
 ledger = IncidentLedger()
 adaptive = AdaptiveThresholds(window_size=500, update_every=100)
-cmd_monitor = CommandMonitor(window_sec=WINDOW_SEC, expected_sysid=1)
+cmd_monitor = CommandMonitor(window_sec=WINDOW_SEC, expected_sysid=1,
+                              arm_grace=1, mode_grace=2)
 print("[M3] EKF, RateLimiter, SequenceValidator, Ledger, Adaptive, CmdMonitor ready")
 
 # Secure transport
@@ -88,6 +100,7 @@ print("[M3] Signed alerts → M5, signed notifications ← M4")
 last_alert_time = 0
 last_failsafe_dispatch = {}   # attack_type -> last time we actually sent a mode command
 FAILSAFE_DISPATCH_COOLDOWN_SEC = 15.0   # don't re-send the same mode command more often than this
+consecutive_alert_counts = {}   # attack_type -> # of consecutive windows it's been seen in
 buffer = deque(maxlen=500)
 unknown_anomalies = []
 attack_markers = {}
@@ -380,6 +393,7 @@ def main():
     print(f"[M3] Verifying M4 notifications on {ATTACK_NOTIFY_PORT}")
     print(f"[M3] Press Ctrl+C to stop\n")
 
+    engine_start_time = time.time()
     last_extract = time.time()
     msg_count = 0
 
@@ -433,6 +447,7 @@ def main():
 
                 if features:
                     phase = features.pop('_phase', 'unknown')
+                    in_startup_grace = (time.time() - engine_start_time) < STARTUP_GRACE_SEC
 
                     # ML prediction
                     feat_vector = [features.get(f, 0) for f in feature_names]
@@ -445,15 +460,39 @@ def main():
                     rule_alerts = apply_rules(features)
                     is_attack = bool(rule_alerts) or (ml_pred == -1)
 
-                    if rule_alerts:
-                        best = max(rule_alerts, key=lambda x: x[1])
-                        emit_alert(master, best[0], best[1], 'rule', features)
-                    elif ml_pred == -1:
-                        conf = min(1.0, max(0.0, (0.1 - ml_score) / 0.2))
-                        emit_alert(master, 'UNKNOWN_ANOMALY', conf, 'ml', features)
-                    else:
+                    if in_startup_grace:
+                        # Still let EKF/adaptive baselines settle; don't
+                        # alert on cold-start transients.
                         if msg_count % 40 == 0:
-                            print(f"[M3] ✅ Normal ({phase}) score={ml_score:.3f} msgs={msg_count}")
+                            print(f"[M3] ⏳ Startup grace ({phase}) msgs={msg_count}")
+                    else:
+                        detected_types = {a[0] for a in rule_alerts}
+                        # Decay counters for any type not seen this window,
+                        # so confirmation requires truly consecutive hits.
+                        for t in list(consecutive_alert_counts.keys()):
+                            if t not in detected_types:
+                                consecutive_alert_counts[t] = 0
+
+                        confirmed = []
+                        for atype, conf in rule_alerts:
+                            consecutive_alert_counts[atype] = consecutive_alert_counts.get(atype, 0) + 1
+                            if consecutive_alert_counts[atype] >= CONFIRM_WINDOWS:
+                                confirmed.append((atype, conf))
+
+                        if confirmed:
+                            best = max(confirmed, key=lambda x: x[1])
+                            emit_alert(master, best[0], best[1], 'rule', features)
+                        elif rule_alerts:
+                            # Seen, but not yet confirmed across enough windows
+                            pending = ', '.join(f"{a}({consecutive_alert_counts[a]}/{CONFIRM_WINDOWS})"
+                                                 for a, _ in rule_alerts)
+                            print(f"[M3] 🕒 Pending confirmation: {pending}")
+                        elif ml_pred == -1:
+                            conf = min(1.0, max(0.0, (0.1 - ml_score) / 0.2))
+                            emit_alert(master, 'UNKNOWN_ANOMALY', conf, 'ml', features)
+                        else:
+                            if msg_count % 40 == 0:
+                                print(f"[M3] ✅ Normal ({phase}) score={ml_score:.3f} msgs={msg_count}")
 
                     # Feed adaptive engine
                     adaptive.add_sample(

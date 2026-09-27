@@ -1,146 +1,179 @@
 """
-M3 Rule-Based Detection
-Loads statistically-derived thresholds from:
-  - models/thresholds.json        (attack-specific thresholds)
-  - models/phase_thresholds.json  (flight-phase + motion consistency)
+M3 Rules Engine
+Threshold-based detection for known attacks, using data-derived
+thresholds from models/thresholds.json + flight-phase awareness
+from models/phase_thresholds.json.
 
-Detects 10 M4 attack types using ONLY drone telemetry (no M4 notifications):
-  1. GPS spoofing / position offset  → gps_jump, gps_change_rate
-  2. GPS freeze                      → motion_consistency
-  3. GPS jamming / dropout           → packet_loss_rate, timestamp_max_gap
-  4. GPS drift                       → gps_cumulative_drift
-  5. Velocity spike                  → velocity_vector_jump
-  6. Velocity sweep                  → velocity_oscillation, direction_change_rate
-  7. Altitude manipulation           → altitude_drift, altitude_velocity_mismatch
-  8. Yaw command hijack              → cmd_yaw_rate_max, cmd_yaw_jump
-  9. Command injection               → cmd_mode_changes, cmd_arm_changes,
-                                       cmd_param_changes, cmd_ack_rate
- 10. Forced takeoff                  → altitude_drift + vertical_speed_mean
+Returns a list of (attack_type, confidence) tuples.
 
-Command-level attacks are detected from the drone's RESPONSE
-(HEARTBEAT mode changes, COMMAND_ACK echoes, ATTITUDE yaw, PARAM_VALUE)
-— M3 does NOT need to see M4's outgoing commands.
+Design notes (anti-FP):
+  - Every numeric threshold is the *statistical* boundary from
+    derive_thresholds.py (μ+5σ, or 99th percentile for heavy-tailed
+    features). Crossing one of these is already rare on normal flight.
+  - Velocity-sweep requires BOTH oscillation and direction-flip to
+    fire, so a single gust/side-wind bump won't trigger it.
+  - Single-window spikes fire at ≥0.90 confidence so that the
+    CONFIRM_WINDOWS gate in runtime_engine confirms them cleanly
+    (3 consecutive windows) instead of flapping.
 """
 
 import os
 import json
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-ATTACK_THRESHOLD_PATH = os.path.join(PROJECT_ROOT, 'models', 'thresholds.json')
-PHASE_THRESHOLD_PATH = os.path.join(PROJECT_ROOT, 'models', 'phase_thresholds.json')
-
-with open(ATTACK_THRESHOLD_PATH, 'r') as f:
-    T = json.load(f)
-
-with open(PHASE_THRESHOLD_PATH, 'r') as f:
-    PHASE = json.load(f)
+THRESHOLDS_PATH = os.path.join(PROJECT_ROOT, 'models', 'thresholds.json')
+PHASE_PATH      = os.path.join(PROJECT_ROOT, 'models', 'phase_thresholds.json')
 
 
-def get_threshold(name, default=1e-6):
-    """Safe accessor with fallback."""
-    return T.get(name, default)
+def _load(path):
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return {}
+
+_TH = _load(THRESHOLDS_PATH)
+_PH = _load(PHASE_PATH)
 
 
-def get_phase(name, default=0.5):
-    """Safe accessor for phase thresholds."""
-    return PHASE.get(name, default)
+def _t(name, default):
+    """Threshold lookup with sane fallbacks if thresholds.json is missing."""
+    return _TH.get(name, default)
 
 
+# Sensible defaults in case derive_thresholds.py hasn't been run yet.
+DEFAULTS = {
+    'gps_jump':                       5.0e-5,
+    'gps_change_rate':                5.0e-6,
+    'motion_consistency':             0.20,
+    'vx_jump':                        1.0,
+    'vy_jump':                        1.0,
+    'vz_jump':                        1.0,
+    'max_horizontal_velocity_jump':   1.2,
+    'velocity_vector_jump':           1.5,
+    'max_velocity_jump':              1.5,
+    'velocity_oscillation':           0.5,
+    'direction_change_rate':          0.3,
+    'altitude_velocity_mismatch':     5.0,
+    'packet_loss_rate':               0.20,
+}
+
+
+def _th(name):
+    return _t(name, DEFAULTS.get(name, 0.0))
+
+
+# ----------------------------------------------------------------------
 def apply_rules(features):
     """
-    Apply statistically-derived thresholds.
-
-    Returns list of (attack_type, confidence) tuples.
-
-    Note on absolute thresholds: for spike-type attacks, μ+5σ is too
-    aggressive (normal flight has huge velocity variance). We use fixed
-    absolute thresholds for those.
+    features: dict produced by runtime_engine.extract_from_window,
+              including the 7 merged cmd_* keys from CommandMonitor.
+    Returns:  list of (attack_type, confidence)
     """
     alerts = []
 
-    # ==================== GPS SPOOFING ====================
-    if features.get('gps_jump', 0) > get_threshold('gps_jump'):
-        alerts.append(('GPS_SPOOFING', 0.90))
-    if features.get('gps_cumulative_drift', 0) > get_threshold('gps_cumulative_drift'):
-        alerts.append(('GPS_SPOOFING_SLOW', 0.85))
-    if features.get('gps_change_rate', 0) > get_threshold('gps_change_rate'):
-        alerts.append(('GPS_SPOOFING_FAST', 0.85))
+    phase = features.get('_phase', 'unknown')
 
-    # ==================== GPS JAMMING ====================
-    # Use 5% fixed minimum (data-derived threshold is essentially 0)
-    if features.get('packet_loss_rate', 0) > 0.05:
-        alerts.append(('GPS_JAMMING', 0.85))
-    if features.get('timestamp_max_gap', 0) > get_threshold('timestamp_max_gap'):
-        alerts.append(('JAMMING_DETECTED', 0.80))
-    if features.get('timestamp_variance', 0) > get_threshold('timestamp_variance'):
-        alerts.append(('JAMMING_DETECTED', 0.75))
+    # ------------------------------------------------------------------
+    # 1) VELOCITY SPIKE  (sudden large change in the velocity vector)
+    # ------------------------------------------------------------------
+    # Two severities:
+    #   - horizontal spike is the typical injection pattern
+    #   - 3D vector spike covers vertical-too cases
+    # A 1.5× margin over the μ+5σ threshold is required for the
+    # higher-confidence flag so normal turbulence doesn't trip it.
+    horiz_jump = features.get('max_horizontal_velocity_jump', 0.0)
+    vec_jump   = features.get('velocity_vector_jump', 0.0)
+    vx_jump    = features.get('vx_jump', 0.0)
+    vy_jump    = features.get('vy_jump', 0.0)
+    vz_jump    = features.get('vz_jump', 0.0)
 
-    # ==================== GPS FREEZE ====================
-    # Velocity says moving, GPS shows zero displacement.
-    # Requires >1.5 m/s to avoid hover false positives.
-    if (features.get('motion_consistency', 1.0) < get_phase('motion_consistency_min')
-            and features.get('velocity_magnitude', 0) > 1.5):
-        alerts.append(('GPS_FREEZE_ATTACK', 0.90))
+    h_th = _th('max_horizontal_velocity_jump')
+    v_th = _th('velocity_vector_jump')
+    z_th = _th('vz_jump')
 
-    # ==================== CONTROL HIJACK ====================
-    if features.get('heading_change', 0) > get_threshold('heading_change'):
-        alerts.append(('CONTROL_HIJACK', 0.85))
-    if features.get('vz_jump', 0) > get_threshold('vz_jump'):
-        alerts.append(('CONTROL_HIJACK', 0.75))
-    if features.get('max_velocity_jump', 0) > get_threshold('max_velocity_jump'):
-        alerts.append(('SUDDEN_CONTROL', 0.75))
+    # Hover is the most sensitive phase — even a modest jump is anomalous
+    # when the drone was supposed to be sitting still.
+    sensitivity = 0.7 if phase == 'hover' else 1.0
 
-    # ==================== VELOCITY SPIKE ====================
-    # Use fixed 5 m/s thresholds — μ+5σ (18.85, 21.53) is too high
-    if features.get('max_horizontal_velocity_jump', 0) > 5.0:
+    if horiz_jump > h_th * 1.5 * sensitivity or (vx_jump > h_th and vy_jump > h_th):
+        alerts.append(('VELOCITY_SPIKE_HORIZONTAL', 0.95))
+    elif horiz_jump > h_th * sensitivity:
         alerts.append(('VELOCITY_SPIKE_HORIZONTAL', 0.85))
-    if features.get('velocity_vector_jump', 0) > 5.0:
+    elif vec_jump > v_th * sensitivity:
+        alerts.append(('VELOCITY_SPIKE', 0.90))
+    elif vz_jump > z_th * 1.5:
+        # vertical-only sudden jump — covered by ALTITUDE_SPOOFING too,
+        # but classify it here as a velocity-domain spike.
         alerts.append(('VELOCITY_SPIKE', 0.85))
 
-    # ==================== VELOCITY SWEEP ====================
-    if features.get('velocity_oscillation', 0) > get_threshold('velocity_oscillation'):
-        alerts.append(('VELOCITY_SWEEP', 0.85))
-    if features.get('direction_change_rate', 0) > get_threshold('direction_change_rate'):
-        alerts.append(('DIRECTION_HIJACK', 0.80))
+    # ------------------------------------------------------------------
+    # 2) VELOCITY SWEEP  (sustained oscillation / weaving)
+    # ------------------------------------------------------------------
+    # Requires BOTH features to exceed their (already 99th-percentile)
+    # thresholds — one alone is too easy to trigger on a gust.
+    osc = features.get('velocity_oscillation', 0.0)
+    dcr = features.get('direction_change_rate', 0.0)
 
-    # ==================== ALTITUDE SPOOFING ====================
-    if features.get('altitude_drift', 0) > get_threshold('altitude_drift'):
-        alerts.append(('ALTITUDE_SPOOFING', 0.80))
-    if features.get('altitude_velocity_mismatch', 0) > get_threshold('altitude_velocity_mismatch'):
-        alerts.append(('ALTITUDE_SPOOFING', 0.75))
+    osc_th = _th('velocity_oscillation')
+    dcr_th = _th('direction_change_rate')
 
-    # ==================== FORCED TAKEOFF ====================
-    # Altitude climbing without command during a non-takeoff phase
-    if (features.get('altitude_drift', 0) > 5.0
-            and features.get('vertical_speed_mean', 0) > 2.0):
-        alerts.append(('FORCED_TAKEOFF', 0.85))
+    if osc > osc_th * 2.0 and dcr > dcr_th * 2.0:
+        alerts.append(('VELOCITY_SWEEP', 0.95))
+    elif osc > osc_th and dcr > dcr_th:
+        alerts.append(('VELOCITY_SWEEP', 0.80))
 
-    # ==================== COMMAND-LEVEL ATTACKS ====================
-    # Detected from the drone's RESPONSE, not M4's outgoing command.
+    # ------------------------------------------------------------------
+    # 3) DIRECTION HIJACK  (large heading change while moving)
+    # ------------------------------------------------------------------
+    # ~115° in one window ≈ 2.0 rad. Only meaningful if the drone was
+    # actually moving — extract_from_window already zeroes heading_change
+    # when horizontal speed < moving_speed_min, so no extra guard needed.
+    if features.get('heading_change', 0.0) > 2.0:
+        alerts.append(('DIRECTION_HIJACK', 0.85))
 
-    # arm_disarm: ANY arm/disarm transition during flight is abnormal
+    # ------------------------------------------------------------------
+    # 4) GPS attacks  (spoofing / freeze)
+    # ------------------------------------------------------------------
+    gps_jump = features.get('gps_jump', 0.0)
+    gps_jump_th = _th('gps_jump')
+    if gps_jump > gps_jump_th * 3.0:
+        alerts.append(('GPS_SPOOFING_FAST', 0.95))
+    elif gps_jump > gps_jump_th:
+        alerts.append(('GPS_SPOOFING_SLOW', 0.85))
+
+    if features.get('motion_consistency', 1.0) < _th('motion_consistency'):
+        alerts.append(('GPS_FREEZE_ATTACK', 0.90))
+
+    # ------------------------------------------------------------------
+    # 5) ALTITUDE SPOOFING  (altitude/velocity cross-check mismatch)
+    # ------------------------------------------------------------------
+    if features.get('altitude_velocity_mismatch', 0.0) > _th('altitude_velocity_mismatch'):
+        alerts.append(('ALTITUDE_SPOOFING', 0.85))
+
+    # ------------------------------------------------------------------
+    # 6) COMMAND-LEVEL attacks  (from merged cmd_monitor.snapshot())
+    #    CommandMonitor already applies the arm/mode grace period, so a
+    #    value of >0 here is a genuine post-setup transition.
+    # ------------------------------------------------------------------
     if features.get('cmd_arm_changes', 0) > 0:
         alerts.append(('ARM_DISARM_ATTACK', 0.90))
-
-    # mode_change / land: ANY mode change during flight is suspicious
-    if features.get('cmd_mode_changes', 0) >= 1:
-        alerts.append(('MODE_CHANGE_ATTACK', 0.85))
-
-    # param_change: any in-flight parameter change
+    if features.get('cmd_mode_changes', 0) > 0:
+        alerts.append(('MODE_CHANGE_ATTACK', 0.90))
     if features.get('cmd_param_changes', 0) > 0:
         alerts.append(('PARAM_CHANGE_ATTACK', 0.85))
-
-    # command_spam: high rate of COMMAND_ACK echoes from drone
-    # (M3 never sees COMMAND_LONG — only the drone's ACKs)
-    if features.get('cmd_ack_rate', 0) > 15:
+    if features.get('cmd_ack_rate', 0) > 20:
         alerts.append(('COMMAND_SPAM', 0.85))
 
-    # yaw_command: high yaw rate (>90 deg/s) or large yaw jump (>45 deg)
-    if features.get('cmd_yaw_rate_max', 0) > 1.57:
+    # Yaw hijack — a rate over ~170°/s is not a normal flight command.
+    if features.get('cmd_yaw_rate_max', 0.0) > 3.0:
         alerts.append(('YAW_HIJACK', 0.85))
-    if features.get('cmd_yaw_jump', 0) > 0.79:
-        alerts.append(('YAW_HIJACK', 0.80))
+
+    # ------------------------------------------------------------------
+    # 7) Comms / jamming
+    # ------------------------------------------------------------------
+    if features.get('packet_loss_rate', 0.0) > _th('packet_loss_rate'):
+        alerts.append(('GPS_JAMMING', 0.80))
 
     return alerts

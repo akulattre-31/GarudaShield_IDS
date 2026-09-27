@@ -272,7 +272,7 @@
 
             <!-- Descriptive Subtitle -->
             <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans">
-                Real-time physics vs GPS divergence monitor. When an intrusion happens (GPS spoofing, injection, or rate flood), the kinematic residual spikes violently above the <strong class="text-amber-400">16.81 χ²</strong> threshold, instantly generating a forensic log.
+                Real-time physics and MAVLink telemetry intrusion monitor. When an intrusion happens (velocity spikes, command spam, or parameter tampering), the kinematic residual spikes violently above the <strong class="text-amber-400">16.81 χ²</strong> threshold, instantly generating a forensic log.
             </p>
 
             <!-- Live Scrolling Waveform Canvas -->
@@ -348,124 +348,248 @@
                 </span>
             </div>
 
-            <!-- Threat 1: GPS Spoofing (Neon Crimson) -->
-            <div id="threat-gps" class="threat-row" data-threat="gps" style="--threat-color: #ff2a55;">
-                <div class="flex justify-between items-center mb-1.5">
-                    <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-[#ff2a55] shadow-[0_0_8px_#ff2a55]"></span>
-                        <span class="font-tech font-bold text-[13px] text-[#ff2a55] drop-shadow-[0_0_8px_rgba(255,42,85,0.45)]">GPS Spoofing</span>
-                    </div>
-                    <span class="threat-badge-safe">Clear</span>
-                </div>
-                <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
-                    Compares satellite coordinates against onboard inertial Kalman filters. Forged or jumped coordinates trip instant physical position lock.
-                </p>
-                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
-                    <span class="text-brand-muted">Sensor Stream:</span>
-                    <span id="metric-gps" class="text-rose-400 font-semibold">χ² 1.2 // EKF Locked</span>
-                </div>
-                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-rose-300 border border-rose-500/40 hover:bg-rose-950/50" data-attack="GPS_SPOOFING">
-                        Test Spike
-                    </button>
-                </div>
-            </div>
+            <div class="flex flex-col gap-3 max-h-[660px] overflow-y-auto pr-1.5 custom-matrix-scroll">
 
-            <!-- Threat 2: Command / Rate Flood (Vivid Amber) -->
-            <div id="threat-dos" class="threat-row" data-threat="dos" style="--threat-color: #ff9900;">
-                <div class="flex justify-between items-center mb-1.5">
-                    <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-[#ff9900] shadow-[0_0_8px_#ff9900]"></span>
-                        <span class="font-tech font-bold text-[13px] text-[#ff9900] drop-shadow-[0_0_8px_rgba(255,153,0,0.45)]">MAVLink Rate Flood</span>
+                <!-- Threat 1: Velocity Spike (Neon Crimson) -->
+                <div id="threat-vel-spike" class="threat-row" data-threat="vel-spike" style="--threat-color: #ff2a55;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#ff2a55] shadow-[0_0_8px_#ff2a55]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#ff2a55] drop-shadow-[0_0_8px_rgba(255,42,85,0.45)]">Velocity Spike</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
                     </div>
-                    <span class="threat-badge-safe">Clear</span>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Injects abrupt local-NED velocity steps via SET_POSITION_TARGET_LOCAL_NED. Tripped on velocity rate-of-change and EKF innovations.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Kinematic Stream:</span>
+                        <span id="metric-vel-spike" class="text-rose-400 font-semibold">v_mag: 0.02 m/s // Clean</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-rose-300 border border-rose-500/40 hover:bg-rose-950/50" data-attack="velocity_spike">
+                            Test Spike
+                        </button>
+                    </div>
                 </div>
-                <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
-                    Kernel-level eBPF packet inspection. Throttles high-frequency command floods (DoS) aimed at overwhelming flight microcontroller loops.
-                </p>
-                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
-                    <span class="text-brand-muted">eBPF Packet Ingress:</span>
-                    <span id="metric-dos" class="text-amber-400 font-semibold">22 pkt/s // Clean</span>
-                </div>
-                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-amber-300 border border-amber-500/40 hover:bg-amber-950/50" data-attack="MAVLINK_FLOOD">
-                        Test Spike
-                    </button>
-                </div>
-            </div>
 
-            <!-- Threat 3: Command Injection (Electric Violet) -->
-            <div id="threat-cmd" class="threat-row" data-threat="injection" style="--threat-color: #a855f7;">
-                <div class="flex justify-between items-center mb-1.5">
-                    <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-[#a855f7] shadow-[0_0_8px_#a855f7]"></span>
-                        <span class="font-tech font-bold text-[13px] text-[#a855f7] drop-shadow-[0_0_8px_rgba(168,85,247,0.45)]">Command Injection</span>
+                <!-- Threat 2: Velocity Sweep (Vivid Amber) -->
+                <div id="threat-vel-sweep" class="threat-row" data-threat="vel-sweep" style="--threat-color: #ff9900;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#ff9900] shadow-[0_0_8px_#ff9900]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#ff9900] drop-shadow-[0_0_8px_rgba(255,153,0,0.45)]">Velocity Sweep</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
                     </div>
-                    <span class="threat-badge-safe">Clear</span>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Alternates rapidly between antagonistic velocity vectors to induce resonant airframe wobble and attitude instability.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Oscillation Monitor:</span>
+                        <span id="metric-vel-sweep" class="text-amber-400 font-semibold">Osc: 0.00 Hz // Stable</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-amber-300 border border-amber-500/40 hover:bg-amber-950/50" data-attack="velocity_sweep">
+                            Test Spike
+                        </button>
+                    </div>
                 </div>
-                <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
-                    Validates cryptographic Ed25519 signatures on flight commands. Unsigned or rogue heading instructions are dropped before autopilot execution.
-                </p>
-                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
-                    <span class="text-brand-muted">Ed25519 Validation:</span>
-                    <span id="metric-cmd" class="text-purple-400 font-semibold">0 Rejected // Active</span>
-                </div>
-                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-purple-300 border border-purple-500/40 hover:bg-purple-950/50" data-attack="COMMAND_INJECTION">
-                        Test Spike
-                    </button>
-                </div>
-            </div>
 
-            <!-- Threat 4: Replay Attack (Neon Electric Cyan) -->
-            <div id="threat-rpl" class="threat-row" data-threat="replay" style="--threat-color: #00e5ff;">
-                <div class="flex justify-between items-center mb-1.5">
-                    <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]"></span>
-                        <span class="font-tech font-bold text-[13px] text-[#00e5ff] drop-shadow-[0_0_8px_rgba(0,229,255,0.45)]">Replay Attack</span>
+                <!-- Threat 3: Position Offset (Neon Electric Cyan) -->
+                <div id="threat-pos-offset" class="threat-row" data-threat="pos-offset" style="--threat-color: #00e5ff;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#00e5ff] drop-shadow-[0_0_8px_rgba(0,229,255,0.45)]">Position Offset</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
                     </div>
-                    <span class="threat-badge-safe">Clear</span>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Injects spoofed local-NED coordinate offsets to push vehicle outside safe geofenced mission perimeter.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Local-NED Δ:</span>
+                        <span id="metric-pos-offset" class="text-cyan-300 font-semibold">ΔNED: [0, 0, 0]m // Nominal</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-cyan-300 border border-cyan-500/40 hover:bg-cyan-950/50" data-attack="position_offset">
+                            Test Spike
+                        </button>
+                    </div>
                 </div>
-                <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
-                    Enforces temporal freshness and rolling nonce counters. Captured valid packets retransmitted by an adversary expire and are discarded.
-                </p>
-                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
-                    <span class="text-brand-muted">Rolling Nonce Window:</span>
-                    <span id="metric-rpl" class="text-cyan-300 font-semibold">&lt;40ms // Fresh</span>
-                </div>
-                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-cyan-300 border border-cyan-500/40 hover:bg-cyan-950/50" data-attack="REPLAY_ATTACK">
-                        Test Spike
-                    </button>
-                </div>
-            </div>
 
-            <!-- Threat 5: Kinematic Drift / Sensor Anomaly (Neon Emerald) -->
-            <div id="threat-drift" class="threat-row" data-threat="drift" style="--threat-color: #10b981;">
-                <div class="flex justify-between items-center mb-1.5">
-                    <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></span>
-                        <span class="font-tech font-bold text-[13px] text-[#10b981] drop-shadow-[0_0_8px_rgba(16,185,129,0.45)]">Sensor Drift / Anomaly</span>
+                <!-- Threat 4: Yaw Command Hijack (Electric Violet) -->
+                <div id="threat-yaw-cmd" class="threat-row" data-threat="yaw-cmd" style="--threat-color: #a855f7;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#a855f7] shadow-[0_0_8px_#a855f7]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#a855f7] drop-shadow-[0_0_8px_rgba(168,85,247,0.45)]">Yaw Command</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
                     </div>
-                    <span class="threat-badge-safe">Clear</span>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Overrides drone heading angle and angular yaw-rate via SET_POSITION_TARGET_LOCAL_NED to disorient navigation and cameras.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Heading Integrity:</span>
+                        <span id="metric-yaw-cmd" class="text-purple-400 font-semibold">Yaw Rate: 0.0 rad/s // Aligned</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-purple-300 border border-purple-500/40 hover:bg-purple-950/50" data-attack="yaw_command">
+                            Test Spike
+                        </button>
+                    </div>
                 </div>
-                <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
-                    Extended Kalman Filter residual scoring. Unphysical accelerations or IMU-barometer decoupling are flagged as sensor manipulation.
-                </p>
-                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
-                    <span class="text-brand-muted">EKF IMU-Baro Δ:</span>
-                    <span id="metric-drift" class="text-emerald-400 font-semibold">0.03m // Decoupled: No</span>
+
+                <!-- Threat 5: Flight Mode Override (Rose Coral) -->
+                <div id="threat-mode-change" class="threat-row" data-threat="mode-change" style="--threat-color: #f43f5e;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#f43f5e] shadow-[0_0_8px_#f43f5e]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#f43f5e] drop-shadow-[0_0_8px_rgba(244,63,94,0.45)]">Mode Change</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
+                    </div>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Transmits unauthorized ArduCopter MAV_MODE transitions (e.g. STABILIZE / RTL / LOITER) to hijack autonomous waypoint execution.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Mode State:</span>
+                        <span id="metric-mode-change" class="text-rose-400 font-semibold">Mode: GUIDED // Authorized</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-rose-300 border border-rose-500/40 hover:bg-rose-950/50" data-attack="mode_change">
+                            Test Spike
+                        </button>
+                    </div>
                 </div>
-                <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-emerald-300 border border-emerald-500/40 hover:bg-emerald-950/50" data-attack="SENSOR_ANOMALY">
-                        Test Spike
-                    </button>
+
+                <!-- Threat 6: Unauthorized Arm / Disarm (Vivid Red) -->
+                <div id="threat-arm-disarm" class="threat-row" data-threat="arm-disarm" style="--threat-color: #ef4444;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#ef4444] shadow-[0_0_8px_#ef4444]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#ef4444] drop-shadow-[0_0_8px_rgba(239,68,68,0.45)]">Arm / Disarm</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
+                    </div>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Injects MAV_CMD_COMPONENT_ARM_DISARM to terminate motor spinning mid-air or force dangerous ground motor spin-up.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Arm Switch Enclave:</span>
+                        <span id="metric-arm-disarm" class="text-red-400 font-semibold">State: ARMED // Normal Flight</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-red-300 border border-red-500/40 hover:bg-red-950/50" data-attack="arm_disarm">
+                            Test Spike
+                        </button>
+                    </div>
                 </div>
+
+                <!-- Threat 7: Forced Takeoff Hijack (Neon Fuchsia) -->
+                <div id="threat-takeoff" class="threat-row" data-threat="takeoff" style="--threat-color: #d946ef;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#d946ef] shadow-[0_0_8px_#d946ef]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#d946ef] drop-shadow-[0_0_8px_rgba(217,70,239,0.45)]">Forced Takeoff</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
+                    </div>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Transmits rogue MAV_CMD_NAV_TAKEOFF commands to initiate high-altitude ascent beyond safe ceiling boundaries.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Ascent Monitor:</span>
+                        <span id="metric-takeoff" class="text-fuchsia-400 font-semibold">Climb: 0.0 m/s // Plan Followed</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-fuchsia-300 border border-fuchsia-500/40 hover:bg-fuchsia-950/50" data-attack="takeoff">
+                            Test Spike
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Threat 8: Rogue Land Command (Cyber Yellow) -->
+                <div id="threat-land" class="threat-row" data-threat="land" style="--threat-color: #eab308;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#eab308] shadow-[0_0_8px_#eab308]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#eab308] drop-shadow-[0_0_8px_rgba(234,179,8,0.45)]">Rogue Land</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
+                    </div>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Spoofs emergency LAND mode instructions to force touchdown in hostile, rugged, or unverified recovery terrain.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Descent Authority:</span>
+                        <span id="metric-land" class="text-yellow-400 font-semibold">Descent: Controlled // Verified</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-yellow-300 border border-yellow-500/40 hover:bg-yellow-950/50" data-attack="land">
+                            Test Spike
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Threat 9: Parameter Tampering (Neon Emerald) -->
+                <div id="threat-param-change" class="threat-row" data-threat="param-change" style="--threat-color: #10b981;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#10b981] drop-shadow-[0_0_8px_rgba(16,185,129,0.45)]">Parameter Change</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
+                    </div>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Silently alters critical autopilot parameters (e.g. PID gains, fail-safes, max velocity) via param_set_send.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Param Integrity:</span>
+                        <span id="metric-param-change" class="text-emerald-400 font-semibold">Param Hash: Verified // Immutable</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-emerald-300 border border-emerald-500/40 hover:bg-emerald-950/50" data-attack="param_change">
+                            Test Spike
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Threat 10: Command Spam / Flood (Sky Cyan) -->
+                <div id="threat-cmd-spam" class="threat-row" data-threat="cmd-spam" style="--threat-color: #38bdf8;">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8] shadow-[0_0_8px_#38bdf8]"></span>
+                            <span class="font-tech font-bold text-[13px] text-[#38bdf8] drop-shadow-[0_0_8px_rgba(56,189,248,0.45)]">Command Spam</span>
+                        </div>
+                        <span class="threat-badge-safe">Clear</span>
+                    </div>
+                    <p class="threat-desc text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
+                        Saturates MAVLink command buffers with high-rate request messages to cause microcontroller CPU starvation and command drops.
+                    </p>
+                    <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                        <span class="text-brand-muted">Command Ingress:</span>
+                        <span id="metric-cmd-spam" class="text-sky-300 font-semibold">Ack Rate: 0 pkt/s // Clean Stream</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
+                        <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                        <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-sky-300 border border-sky-500/40 hover:bg-sky-950/50" data-attack="command_spam">
+                            Test Spike
+                        </button>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Live Threat Telemetry & Incident Ledger Summary -->

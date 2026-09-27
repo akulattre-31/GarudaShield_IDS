@@ -141,6 +141,8 @@ last_known_telemetry = {
 
 current_threat_status = "NOMINAL"
 current_residual = 1.2
+threat_expiry_time = 0.0
+last_threat_details = None
 active_mavlink_ports = set()
 
 async def broadcast_to_websockets(payload: dict):
@@ -210,10 +212,16 @@ def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
                     cpu_calc = 15.0 + random.uniform(-0.5, 0.5)
                     ram_calc = 30.0 + random.uniform(-0.3, 0.3)
 
-                # Under attack threat, avionics surge but eBPF defense throttles to prevent crash
+                global threat_expiry_time
                 if current_threat_status and "THREAT" in current_threat_status:
-                    cpu_calc = min(cpu_calc + 32.0, 79.5)
-                    ram_calc = min(ram_calc + 15.0, 68.0)
+                    if time.time() >= threat_expiry_time:
+                        current_threat_status = "NOMINAL"
+                        current_residual = 1.2
+                        cpu_calc = min(cpu_calc, 64.0)
+                        ram_calc = min(ram_calc, 52.0)
+                    else:
+                        cpu_calc = min(cpu_calc + 32.0, 79.5)
+                        ram_calc = min(ram_calc + 15.0, 68.0)
                 else:
                     cpu_calc = min(cpu_calc, 64.0)
                     ram_calc = min(ram_calc, 52.0)
@@ -263,7 +271,7 @@ def start_mavlink_listeners(loop: asyncio.AbstractEventLoop):
 
 async def secure_receiver_loop():
     """Polls verified UDP packets from Blue Team / M3 Sensor Engine on port 9000."""
-    global last_udp_time, current_threat_status, current_residual
+    global last_udp_time, current_threat_status, current_residual, threat_expiry_time
     print(f"[UI Bridge] Ingress online: Listening for signed packets on UDP {LISTEN_PORT}...")
     while True:
         try:
@@ -302,15 +310,21 @@ async def secure_receiver_loop():
 
                     is_threat = bool(attack_type and confidence > 0.5)
                     if is_threat:
-                        status = f"CRITICAL THREAT INTERCEPTED: {attack_type.upper()}"
+                        current_threat_status = f"CRITICAL THREAT INTERCEPTED: {attack_type.upper()}"
                         res = payload.get('kinematic_residual', None)
                         if res is None or float(res) < 16.81:
-                            residual = round(random.uniform(28.5, 39.8), 2)
+                            current_residual = round(random.uniform(28.5, 39.8), 2)
                         else:
-                            residual = round(float(res), 2)
+                            current_residual = round(float(res), 2)
+                        threat_expiry_time = time.time() + 8.0
+                        residual = current_residual
+                        status = current_threat_status
                     else:
-                        status = "NOMINAL"
-                        residual = round(float(payload.get('kinematic_residual', random.uniform(0.8, 2.2))), 2)
+                        if time.time() > threat_expiry_time:
+                            current_threat_status = "NOMINAL"
+                            current_residual = round(float(payload.get('kinematic_residual', random.uniform(0.8, 2.2))), 2)
+                        residual = current_residual
+                        status = current_threat_status
 
                     ui_payload = {
                         "telemetry": dict(last_known_telemetry),
@@ -423,14 +437,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                 elif action == "SIMULATE_ATTACK":
                     # Operator simulation for UI evaluation
-                    attack_type = payload.get("type", "GPS_SPOOFING")
-                    status = f"CRITICAL THREAT INTERCEPTED: {attack_type.upper()}"
-                    sim_residual = round(random.uniform(31.0, 42.0), 2)
-                    failsafe = "BRAKE" if ("GPS" in attack_type or "INJECTION" in attack_type or "RATE" in attack_type) else "RTL"
+                    global current_threat_status, current_residual, threat_expiry_time
+                    attack_type = payload.get("type", "velocity_spike")
+                    current_threat_status = f"CRITICAL THREAT INTERCEPTED: {attack_type.upper()}"
+                    current_residual = round(random.uniform(31.0, 42.0), 2)
+                    threat_expiry_time = time.time() + 8.0
+                    failsafe = "BRAKE"
                     sim_payload = {
                         "telemetry": dict(last_known_telemetry),
-                        "kinematic_residual": sim_residual,
-                        "system_status": status,
+                        "kinematic_residual": current_residual,
+                        "system_status": current_threat_status,
                         "link_connected": True,
                         "link_status": "SIMULATED_TEST_BURST",
                         "new_incident": True,
@@ -445,6 +461,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     for ws_client in list(active_websockets):
                         asyncio.create_task(ws_client.send_json(sim_payload))
                 elif action == "CLEAR_THREAT":
+                    current_threat_status = "NOMINAL"
+                    current_residual = 1.2
+                    threat_expiry_time = 0.0
                     sim_payload = {
                         "telemetry": dict(last_known_telemetry),
                         "kinematic_residual": round(random.uniform(0.9, 1.8), 2),

@@ -5,45 +5,105 @@
 
 // ── 1. ATTACK COLOR THEMES & SPECIFICATIONS ───────────────────────
 const ATTACK_THEMES = {
-    GPS_SPOOFING: {
-        id: 'gps',
-        name: 'GPS Spoofing',
+    VELOCITY_SPIKE: {
+        id: 'vel-spike',
+        name: 'Velocity Spike',
         color: '#ff2a55',        // Neon Crimson
         bgAlpha: 'rgba(255, 42, 85, 0.15)',
-        rowId: 'threat-gps',
-        countermeasure: 'Inertial Position Lock & Optical Hover'
+        rowId: 'threat-vel-spike',
+        countermeasure: 'Autonomous Inertial Hover & Optical Velocity Clamping',
+        defaultMetric: 'v_mag: 0.02 m/s // Clean',
+        alertMetric: 'v_mag: 5.00 m/s // KINEMATIC SPIKE'
     },
-    MAVLINK_FLOOD: {
-        id: 'dos',
-        name: 'MAVLink Rate Flood',
+    VELOCITY_SWEEP: {
+        id: 'vel-sweep',
+        name: 'Velocity Sweep',
         color: '#ff9900',        // Vivid Amber
         bgAlpha: 'rgba(255, 153, 0, 0.15)',
-        rowId: 'threat-dos',
-        countermeasure: 'Kernel eBPF Packet Ingress Throttling'
+        rowId: 'threat-vel-sweep',
+        countermeasure: 'Kinematic Oscillation Damping & Trajectory Hold',
+        defaultMetric: 'Osc: 0.00 Hz // Stable',
+        alertMetric: 'Osc: 1.82 Hz // DIRECTION OSCILLATION'
     },
-    COMMAND_INJECTION: {
-        id: 'injection',
-        name: 'Command Injection',
-        color: '#a855f7',        // Electric Violet
-        bgAlpha: 'rgba(168, 85, 247, 0.15)',
-        rowId: 'threat-cmd',
-        countermeasure: 'Cryptographic Ed25519 Auth Drop'
-    },
-    REPLAY_ATTACK: {
-        id: 'replay',
-        name: 'Replay Attack',
+    POSITION_OFFSET: {
+        id: 'pos-offset',
+        name: 'Position Offset',
         color: '#00e5ff',        // Neon Electric Cyan
         bgAlpha: 'rgba(0, 240, 255, 0.15)',
-        rowId: 'threat-rpl',
-        countermeasure: 'Temporal Freshness Nonce Expiry'
+        rowId: 'threat-pos-offset',
+        countermeasure: 'Inertial Waypoint Grounding & Local-NED Lock',
+        defaultMetric: 'ΔNED: [0, 0, 0]m // Nominal',
+        alertMetric: 'ΔNED: [10, 0, -5]m // GEOFENCE BREACH'
     },
-    SENSOR_ANOMALY: {
-        id: 'drift',
-        name: 'Sensor Drift / Anomaly',
+    YAW_COMMAND: {
+        id: 'yaw-cmd',
+        name: 'Yaw Command Hijack',
+        color: '#a855f7',        // Electric Violet
+        bgAlpha: 'rgba(168, 85, 247, 0.15)',
+        rowId: 'threat-yaw-cmd',
+        countermeasure: 'Attitude Compass Lock & Gyro Cross-Check',
+        defaultMetric: 'Yaw Rate: 0.0 rad/s // Aligned',
+        alertMetric: 'Yaw Δ: 90.0° // RATE HIJACK DETECTED'
+    },
+    MODE_CHANGE: {
+        id: 'mode-change',
+        name: 'Flight Mode Override',
+        color: '#f43f5e',        // Rose Coral
+        bgAlpha: 'rgba(244, 63, 94, 0.15)',
+        rowId: 'threat-mode-change',
+        countermeasure: 'Autonomous Mode Authorization & Flight Lockout',
+        defaultMetric: 'Mode: GUIDED // Authorized',
+        alertMetric: 'Mode: UNKNOWN TRANSITION // INTERCEPTED'
+    },
+    ARM_DISARM: {
+        id: 'arm-disarm',
+        name: 'Unauthorized Arm / Disarm',
+        color: '#ef4444',        // Vivid Red
+        bgAlpha: 'rgba(239, 68, 68, 0.15)',
+        rowId: 'threat-arm-disarm',
+        countermeasure: 'Airborne Killswitch Guard & Motor Inhibit',
+        defaultMetric: 'State: ARMED // Normal Flight',
+        alertMetric: 'CMD 400: AIRBORNE DISARM INHIBITED'
+    },
+    FORCED_TAKEOFF: {
+        id: 'takeoff',
+        name: 'Forced Takeoff Hijack',
+        color: '#d946ef',        // Neon Fuchsia
+        bgAlpha: 'rgba(217, 70, 239, 0.15)',
+        rowId: 'threat-takeoff',
+        countermeasure: 'Vertical Velocity Clamp & Immediate Hover Lock',
+        defaultMetric: 'Climb: 0.0 m/s // Plan Followed',
+        alertMetric: 'Alt: +30m REQ // CEILING INHIBIT ENGAGED'
+    },
+    LAND: {
+        id: 'land',
+        name: 'Rogue Land Command',
+        color: '#eab308',        // Cyber Yellow
+        bgAlpha: 'rgba(234, 179, 8, 0.15)',
+        rowId: 'threat-land',
+        countermeasure: 'Geofenced Landing Authorization Check',
+        defaultMetric: 'Descent: Controlled // Verified',
+        alertMetric: 'LAND OVERRIDE // FORCED ABORT ENGAGED'
+    },
+    PARAMETER_CHANGE: {
+        id: 'param-change',
+        name: 'Parameter Tampering',
         color: '#10b981',        // Neon Emerald
         bgAlpha: 'rgba(16, 185, 129, 0.15)',
-        rowId: 'threat-drift',
-        countermeasure: 'EKF Chi-Square Decoupling Failsafe'
+        rowId: 'threat-param-change',
+        countermeasure: 'Read-Only Param Enclave & Shadow Rollback',
+        defaultMetric: 'Param Hash: Verified // Immutable',
+        alertMetric: 'PARAM_SET TAMPER: ROLLBACK EXECUTED'
+    },
+    COMMAND_SPAM: {
+        id: 'cmd-spam',
+        name: 'Command Spam / Flood',
+        color: '#38bdf8',        // Sky Cyan
+        bgAlpha: 'rgba(56, 189, 248, 0.15)',
+        rowId: 'threat-cmd-spam',
+        countermeasure: 'Kernel eBPF Rate Limiter & Token Bucket Filter',
+        defaultMetric: 'Ack Rate: 0 pkt/s // Clean Stream',
+        alertMetric: 'Rate: 24 pkt/s // FLOOD INGRESS THROTTLED'
     },
     UNMENTIONED_ATTACK: {
         id: 'unmentioned',
@@ -52,17 +112,24 @@ const ATTACK_THEMES = {
         accentBorder: '#ffffff',
         bgAlpha: 'rgba(8, 12, 22, 0.85)',
         rowId: null,
-        countermeasure: 'Zero-Trust Protocol Isolation & Autonomous Guard'
+        countermeasure: 'Zero-Trust Protocol Isolation & Autonomous Guard',
+        defaultMetric: 'Integrity: 100% // Clean',
+        alertMetric: 'UNKNOWN ANOMALY DETECTED'
     }
 };
 
 function resolveAttackTheme(typeStr) {
     const raw = (typeStr || '').toUpperCase().trim();
-    if (raw.includes('GPS') || raw.includes('SPOOF')) return ATTACK_THEMES.GPS_SPOOFING;
-    if (raw.includes('FLOOD') || raw.includes('DOS') || raw.includes('RATE')) return ATTACK_THEMES.MAVLINK_FLOOD;
-    if (raw.includes('INJECTION') || raw.includes('ROGUE') || raw.includes('CMD')) return ATTACK_THEMES.COMMAND_INJECTION;
-    if (raw.includes('REPLAY') || raw.includes('NONCE') || raw.includes('STALE')) return ATTACK_THEMES.REPLAY_ATTACK;
-    if (raw.includes('SENSOR') || raw.includes('DRIFT') || raw.includes('ANOMALY') || raw.includes('EKF')) return ATTACK_THEMES.SENSOR_ANOMALY;
+    if (raw.includes('SWEEP')) return ATTACK_THEMES.VELOCITY_SWEEP;
+    if (raw.includes('SPIKE')) return ATTACK_THEMES.VELOCITY_SPIKE;
+    if (raw.includes('OFFSET') || raw.includes('POSITION') || raw.includes('GPS') || raw.includes('SPOOF')) return ATTACK_THEMES.POSITION_OFFSET;
+    if (raw.includes('YAW') || raw.includes('HEADING')) return ATTACK_THEMES.YAW_COMMAND;
+    if (raw.includes('MODE')) return ATTACK_THEMES.MODE_CHANGE;
+    if (raw.includes('ARM') || raw.includes('DISARM')) return ATTACK_THEMES.ARM_DISARM;
+    if (raw.includes('TAKEOFF')) return ATTACK_THEMES.FORCED_TAKEOFF;
+    if (raw.includes('LAND')) return ATTACK_THEMES.LAND;
+    if (raw.includes('PARAM')) return ATTACK_THEMES.PARAMETER_CHANGE;
+    if (raw.includes('SPAM') || raw.includes('FLOOD') || raw.includes('DOS') || raw.includes('RATE')) return ATTACK_THEMES.COMMAND_SPAM;
     
     // For any unmentioned/custom attack: Return Tactical Obsidian Black theme
     const formattedName = typeStr ? typeStr.replace(/_/g, ' ') : 'Unclassified Threat';
@@ -73,7 +140,9 @@ function resolveAttackTheme(typeStr) {
         accentBorder: '#ffffff',
         bgAlpha: 'rgba(8, 12, 22, 0.85)',
         rowId: null,
-        countermeasure: 'Zero-Trust Protocol Isolation & Autonomous Guard'
+        countermeasure: 'Zero-Trust Protocol Isolation & Autonomous Guard',
+        defaultMetric: 'Integrity: 100% // Clean',
+        alertMetric: 'ANOMALY DETECTED'
     };
 }
 
@@ -632,18 +701,24 @@ function handleThreatState(status, incidentDetails) {
         window._activeThreat = 'NOMINAL';
         window._activeAttackTheme = null;
 
-        // Reset Threat Cards
+        // Reset Threat Cards & Dynamic Metrics
         Object.values(ATTACK_THEMES).forEach(theme => {
-            const row = document.getElementById(theme.rowId);
-            if (row) {
-                row.classList.remove('active-threat');
-                const badge = row.querySelector('.threat-badge-alert, .threat-badge-safe');
-                if (badge) {
-                    badge.className = 'threat-badge-safe';
-                    badge.textContent = 'Clear';
-                    badge.style.color = '';
-                    badge.style.borderColor = '';
+            if (theme.rowId) {
+                const row = document.getElementById(theme.rowId);
+                if (row) {
+                    row.classList.remove('active-threat');
+                    const badge = row.querySelector('.threat-badge-alert, .threat-badge-safe');
+                    if (badge) {
+                        badge.className = 'threat-badge-safe';
+                        badge.textContent = 'Clear';
+                        badge.style.color = '';
+                        badge.style.borderColor = '';
+                    }
                 }
+            }
+            const metricEl = document.getElementById(`metric-${theme.id}`);
+            if (metricEl && theme.defaultMetric) {
+                metricEl.innerHTML = theme.defaultMetric;
             }
         });
 
@@ -662,18 +737,6 @@ function handleThreatState(status, incidentDetails) {
         document.documentElement.style.setProperty('--hud-threat', '#00f0ff');
         flightPath.setStyle({ color: '#00f0ff' });
         document.body.classList.remove('critical-threat-mode');
-
-        // Reset Threat Metrics
-        const mgps = document.getElementById('metric-gps');
-        const mdos = document.getElementById('metric-dos');
-        const mcmd = document.getElementById('metric-cmd');
-        const mrpl = document.getElementById('metric-rpl');
-        const mdrift = document.getElementById('metric-drift');
-        if (mgps) mgps.innerHTML = 'χ² 1.2 // EKF Locked';
-        if (mdos) mdos.innerHTML = '22 pkt/s // Clean';
-        if (mcmd) mcmd.innerHTML = '0 Rejected // Active';
-        if (mrpl) mrpl.innerHTML = '&lt;40ms // Fresh';
-        if (mdrift) mdrift.innerHTML = '0.03m // Decoupled: No';
 
         const mapStatus = document.getElementById('map-drone-status');
         if (mapStatus) {
@@ -700,6 +763,10 @@ function handleThreatState(status, incidentDetails) {
             badge.textContent = 'INTERCEPTED';
             badge.style.color = theme.color;
             badge.style.borderColor = theme.color;
+        }
+        const metricEl = document.getElementById(`metric-${theme.id}`);
+        if (metricEl && theme.alertMetric) {
+            metricEl.innerHTML = `<span style="color:${theme.color};font-weight:700;">${theme.alertMetric}</span>`;
         }
     }
 
@@ -758,7 +825,7 @@ function recordIncident(details, lat, lon) {
         : '96%';
 
     const hash = '0x' + btoa(`${details.type}${Date.now()}`).slice(0, 10).toLowerCase();
-    const failsafeMode = details.failsafe_mode || (theme.id === 'gps' || theme.id === 'injection' ? 'BRAKE' : (theme.id === 'drift' ? 'LAND' : 'RTL'));
+    const failsafeMode = details.failsafe_mode || 'BRAKE';
 
     // Increment counter & update status in Threat Matrix
     const rowEl = document.getElementById(theme.rowId);
@@ -773,12 +840,8 @@ function recordIncident(details, lat, lon) {
 
     // Update dynamic metric preview on that threat card
     const metricEl = document.getElementById(`metric-${theme.id}`);
-    if (metricEl) {
-        if (theme.id === 'gps') metricEl.innerHTML = `<span style="color:#ff2a55;font-weight:700;">χ² ${(currentResidual || 36.8).toFixed(1)} // SPIKE DETECTED</span>`;
-        if (theme.id === 'dos') metricEl.innerHTML = `<span style="color:#ff9900;font-weight:700;">480 pkt/s // FLOOD INGRESS</span>`;
-        if (theme.id === 'injection') metricEl.innerHTML = `<span style="color:#a855f7;font-weight:700;">INVALID SIG // REJECTED</span>`;
-        if (theme.id === 'replay') metricEl.innerHTML = `<span style="color:#00e5ff;font-weight:700;">STALE NONCE // DISCARDED</span>`;
-        if (theme.id === 'drift') metricEl.innerHTML = `<span style="color:#10b981;font-weight:700;">Δ 14.2m // EKF DECOUPLED</span>`;
+    if (metricEl && theme.alertMetric) {
+        metricEl.innerHTML = `<span style="color:${theme.color};font-weight:700;">${theme.alertMetric}</span>`;
     }
 
     // ── Drop Colored Glowing Attack Dot Marker on Leaflet Map ──

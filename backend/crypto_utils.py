@@ -67,8 +67,8 @@ def verify_envelope(envelope: dict, max_age_sec: int = 60) -> tuple:
     age = time.time() - ts
     if age > max_age_sec:
         return False, f'stale ({age:.0f}s old)'
-    if age < -5:
-        return False, 'future_timestamp'
+    if age < -60:
+        return False, f'future_timestamp ({abs(age):.0f}s ahead)'
 
     if not verify(envelope['payload'], envelope['signature']):
         return False, 'bad_signature'

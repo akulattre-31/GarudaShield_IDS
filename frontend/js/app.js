@@ -16,15 +16,15 @@ L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}', {
 const droneIcon = L.divIcon({
     className: 'custom-drone-icon',
     html: `<div style="position: relative; width: 40px; height: 40px; transform: rotate(0deg);" id="drone-marker">
-            <div class="drone-pulse" style="background: var(--hud-threat, #38BDF8); opacity: 0.4;"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 10; color: var(--hud-threat, #38BDF8); filter: drop-shadow(0 0 5px var(--hud-threat, #38BDF8));"><circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="6.4" y1="6.4" x2="17.6" y2="17.6"/><line x1="6.4" y1="17.6" x2="17.6" y2="6.4"/><circle cx="12" cy="12" r="3"/></svg>
+            <div class="drone-pulse" style="background: var(--hud-threat, #00f0ff); opacity: 0.4;"></div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 10; color: var(--hud-threat, #00f0ff); filter: drop-shadow(0 0 5px var(--hud-threat, #00f0ff));"><circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="6.4" y1="6.4" x2="17.6" y2="17.6"/><line x1="6.4" y1="17.6" x2="17.6" y2="6.4"/><circle cx="12" cy="12" r="3"/></svg>
            </div>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20]
 });
 
 let droneMarker = L.marker([-35.363262, 149.165237], { icon: droneIcon }).addTo(map);
-let flightPath = L.polyline([], { color: '#38BDF8', weight: 3, opacity: 0.8, dashArray: '6, 6' }).addTo(map);
+let flightPath = L.polyline([], { color: '#00f0ff', weight: 3, opacity: 0.8, dashArray: '6, 6' }).addTo(map);
 
 
 // ==========================================
@@ -34,7 +34,7 @@ const ctx = document.getElementById('residualChart').getContext('2d');
 const maxDataPoints = 50; 
 
 let gradientFill = ctx.createLinearGradient(0, 0, 0, 160);
-gradientFill.addColorStop(0, 'rgba(56, 189, 248, 0.3)');
+gradientFill.addColorStop(0, 'rgba(56, 189, 248, 0.6)');
 gradientFill.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
 
 const residualChart = new Chart(ctx, {
@@ -45,17 +45,17 @@ const residualChart = new Chart(ctx, {
             {
                 label: ' PHYSICS VS GPS DEVIATION',
                 data: Array(maxDataPoints).fill(0),
-                borderColor: '#38BDF8',
+                borderColor: '#00f0ff',
                 backgroundColor: gradientFill,
-                borderWidth: 2,
+                borderWidth: 3,
                 pointRadius: 0,
                 fill: true,
-                tension: 0.3
+                tension: 0.5
             },
             {
                 label: ' THRESHOLD (16.81 χ²)',
                 data: Array(maxDataPoints).fill(16.81),
-                borderColor: '#F59E0B',
+                borderColor: '#f59e0b',
                 borderWidth: 1.5,
                 borderDash: [4, 4],
                 pointRadius: 0,
@@ -80,6 +80,76 @@ const residualChart = new Chart(ctx, {
 
 
 // ==========================================
+// 2.5 INTERACTIVE RADAR & BLIPS
+// ==========================================
+const radarElement = document.querySelector('.radar');
+let radarTargets = [];
+
+const radarParent = document.querySelector('.tactical-grid-bg') || (radarElement ? radarElement.parentElement : null);
+if (radarParent && radarElement) {
+    // Interactivity: Add mouse tracking for scanning focus
+    radarParent.addEventListener('mousemove', (e) => {
+        const rect = radarParent.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        radarElement.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(56, 189, 248, 0.3) 0%, rgba(15, 23, 42, 0.9) 100%)`;
+    });
+    radarParent.addEventListener('mouseleave', () => {
+        radarElement.style.background = `radial-gradient(circle, rgba(56, 189, 248, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)`;
+    });
+
+    // Populate with 3 initial "ambient" blips
+    for(let i=0; i<3; i++) spawnRadarBlip('#00f0ff', true);
+}
+
+function spawnRadarBlip(color, isAmbient = false) {
+    if (!radarElement) return;
+    const blip = document.createElement('div');
+    blip.className = 'radar-blip';
+    blip.style.backgroundColor = color;
+    blip.style.boxShadow = `0 0 10px ${color}, 0 0 20px ${color}`;
+    
+    // Start somewhere away from center
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 15 + Math.random() * 30;
+    
+    blip.dataset.angle = angle;
+    blip.dataset.dist = dist;
+    blip.dataset.speed = (Math.random() * 0.01 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
+    
+    radarElement.appendChild(blip);
+    radarTargets.push(blip);
+
+    if (!isAmbient) {
+        blip.style.width = '8px';
+        blip.style.height = '8px';
+        blip.style.animationDuration = '1.5s'; // pulse faster for threats
+        setTimeout(() => {
+            if (blip.parentNode) blip.parentNode.removeChild(blip);
+            radarTargets = radarTargets.filter(b => b !== blip);
+        }, 6000);
+    }
+}
+
+// Update radar blips position on animation frame
+function animateRadar() {
+    radarTargets.forEach(blip => {
+        let angle = parseFloat(blip.dataset.angle);
+        let dist = parseFloat(blip.dataset.dist);
+        angle += parseFloat(blip.dataset.speed);
+        blip.dataset.angle = angle;
+        
+        const x = 50 + Math.cos(angle) * dist;
+        const y = 50 + Math.sin(angle) * dist;
+        blip.style.left = `${x}%`;
+        blip.style.top = `${y}%`;
+    });
+    requestAnimationFrame(animateRadar);
+}
+animateRadar();
+
+
+// ==========================================
 // 3. WEBSOCKET CONNECTION
 // ==========================================
 const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -98,9 +168,9 @@ ws.onmessage = function(event) {
     const currentSpd = telemetry.speed_ms !== undefined ? telemetry.speed_ms : prevSpd;
     
     const altTrend = currentAlt > prevAlt ? '▲' : (currentAlt < prevAlt ? '▼' : '');
-    const altTrendColor = currentAlt > prevAlt ? '#10B981' : (currentAlt < prevAlt ? '#EF4444' : '#F8FAFC');
+    const altTrendColor = currentAlt > prevAlt ? '#00f0ff' : (currentAlt < prevAlt ? '#ef4444' : '#F8FAFC');
     const spdTrend = currentSpd > prevSpd ? '▲' : (currentSpd < prevSpd ? '▼' : '');
-    const spdTrendColor = currentSpd > prevSpd ? '#10B981' : (currentSpd < prevSpd ? '#EF4444' : '#F8FAFC');
+    const spdTrendColor = currentSpd > prevSpd ? '#00f0ff' : (currentSpd < prevSpd ? '#ef4444' : '#F8FAFC');
     
     prevAlt = currentAlt;
     prevSpd = currentSpd;
@@ -111,6 +181,51 @@ ws.onmessage = function(event) {
     const spdEl = document.getElementById("spd-val");
     if(spdEl) spdEl.innerHTML = `<span style="color:${spdTrendColor}; font-size:14px;">${spdTrend}</span> ${currentSpd.toFixed(1)}m/s`;
     
+    
+    // Update Segmented Bars
+    function updateSegments(id, pct) {
+        const container = document.getElementById(id);
+        if(container) {
+            const divs = container.querySelectorAll('div');
+            const activeCount = Math.floor((pct / 100) * divs.length);
+            divs.forEach((div, idx) => {
+                div.className = (idx < activeCount) ? 'h-full w-full bg-brand-accent rounded-sm' : 'h-full w-full bg-brand-border rounded-sm';
+            });
+        }
+    }
+    
+    function updateCpuSegments(pct) {
+        const container = document.getElementById('cpu-segments');
+        if(container) {
+            const children = Array.from(container.children);
+            const activeCount = Math.floor((pct / 100) * children.length);
+            children.forEach((outerDiv, idx) => {
+                const innerDiv = outerDiv.firstElementChild;
+                if(innerDiv) {
+                    let h = 50 + (idx % 3) * 20;
+                    let c = (idx < activeCount) ? 'bg-brand-danger' : 'bg-brand-accent';
+                    innerDiv.className = `w-full ${c} transition-all h-[${h}%]`;
+                }
+            });
+        }
+    }
+    
+    const altPct = Math.min((currentAlt / 200) * 100, 100);
+    updateSegments('alt-segments', altPct);
+    
+    const spdPct = Math.min((currentSpd / 25) * 100, 100);
+    updateSegments('spd-segments', spdPct);
+    
+    if(telemetry.cpu_load_pct !== undefined) {
+        updateCpuSegments(telemetry.cpu_load_pct);
+    }
+    
+    const ramFill = document.getElementById('ram-fill');
+    if(ramFill) {
+        const ramPct = telemetry.ram_load_pct !== undefined ? telemetry.ram_load_pct : 0;
+        ramFill.style.width = `${ramPct}%`;
+    }
+
     // Altitude Gauge (Mock max 200m for percentage)
     const altGauge = document.getElementById("alt-gauge");
     if(altGauge) {
@@ -137,24 +252,24 @@ ws.onmessage = function(event) {
     const cpuPct = telemetry.cpu_load_pct !== undefined ? telemetry.cpu_load_pct : 0;
     const cpuGauge = document.getElementById("cpu-gauge");
     const cpuText = document.getElementById("cpu-val-text");
-    if(cpuGauge && cpuText) {
+    if(cpuText) cpuText.textContent = `${cpuPct.toFixed(1)}%`;
+    if(cpuGauge) {
         cpuGauge.setAttribute("stroke-dasharray", `${cpuPct}, 100`);
-        cpuText.textContent = `${cpuPct.toFixed(1)}%`;
-        if (cpuPct > 85) cpuGauge.style.stroke = '#EF4444';
-        else if (cpuPct > 60) cpuGauge.style.stroke = '#F59E0B';
-        else cpuGauge.style.stroke = '#38BDF8';
+        if (cpuPct > 85) cpuGauge.style.stroke = '#ef4444';
+        else if (cpuPct > 60) cpuGauge.style.stroke = '#f59e0b';
+        else cpuGauge.style.stroke = '#00f0ff';
     }
 
     // RAM Gauge Update
     const ramPct = telemetry.ram_load_pct !== undefined ? telemetry.ram_load_pct : 0;
     const ramGauge = document.getElementById("ram-gauge");
     const ramText = document.getElementById("ram-val-text");
-    if(ramGauge && ramText) {
+    if(ramText) ramText.textContent = `${ramPct.toFixed(1)}%`;
+    if(ramGauge) {
         ramGauge.setAttribute("stroke-dasharray", `${ramPct}, 100`);
-        ramText.textContent = `${ramPct.toFixed(1)}%`;
-        if (ramPct > 85) ramGauge.style.stroke = '#EF4444';
-        else if (ramPct > 60) ramGauge.style.stroke = '#F59E0B';
-        else ramGauge.style.stroke = '#38BDF8';
+        if (ramPct > 85) ramGauge.style.stroke = '#ef4444';
+        else if (ramPct > 60) ramGauge.style.stroke = '#f59e0b';
+        else ramGauge.style.stroke = '#00f0ff';
     }
     
     // Update Map
@@ -201,17 +316,21 @@ ws.onmessage = function(event) {
     const tRpl = document.getElementById("threat-rpl");
 
     // Reset all
-    [tGps, tDos, tCmd, tRpl].forEach(el => {
-        if (el) el.className = "threat-item";
-    });
+    const defaultThreatClass = "bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300";
+    if (tGps) tGps.className = defaultThreatClass;
+    if (tDos) tDos.className = defaultThreatClass;
+    if (tCmd) tCmd.className = defaultThreatClass;
+    if (tRpl) tRpl.className = defaultThreatClass;
     
     const system_status = data.system_status || "NOMINAL";
 
+    
     if (system_status !== "NOMINAL") {
-        document.getElementById("status-banner").className = "header threat";
-        document.getElementById("status-icon").className = "fa-solid fa-radiation";
+        document.getElementById("status-banner").className = "flex-none bg-brand-surface/60 backdrop-blur-lg border-b border-brand-danger shadow-[0_0_20px_rgba(239,68,68,0.4)] px-6 py-4 flex items-center justify-between transition-all duration-300";
+        document.getElementById("status-icon").className = "w-3 h-3 bg-brand-danger rounded-full animate-ping";
         document.getElementById("status-text").innerText = "[ CRITICAL THREAT INTERCEPTED: " + system_status.replace('CRITICAL THREAT INTERCEPTED: ', '') + " ]";
-        
+        document.getElementById("status-text").className = "text-brand-danger";
+
         if (window.currentThreatState !== system_status) {
             document.body.classList.add("critical-threat-mode");
             if (window.threatFlashTimeout) clearTimeout(window.threatFlashTimeout);
@@ -222,36 +341,55 @@ ws.onmessage = function(event) {
         }
         
         if (system_status.includes("GPS")) {
-            tGps.classList.add("active-gps");
-            flightPath.setStyle({ color: '#EF4444' }); // Red for GPS Spoof
-            document.documentElement.style.setProperty('--hud-threat', '#EF4444');
+            if(tGps) {
+                tGps.classList.add("shadow-[0_0_15px_rgba(239,68,68,0.5)]");
+                tGps.classList.replace("bg-brand-bg", "bg-brand-danger/20"); tGps.classList.replace("border-brand-border", "border-brand-danger");
+            }
+            flightPath.setStyle({ color: '#ef4444' }); // Red for GPS Spoof
+            document.documentElement.style.setProperty('--hud-threat', '#ef4444');
         } else if (system_status.includes("FLOOD")) {
-            tDos.classList.add("active-dos");
-            flightPath.setStyle({ color: '#F59E0B' }); // Amber for DoS
-            document.documentElement.style.setProperty('--hud-threat', '#F59E0B');
+            if(tDos) {
+                tDos.classList.add("shadow-[0_0_15px_rgba(245,158,11,0.5)]");
+                tDos.classList.replace("bg-brand-bg", "bg-brand-warning/20"); tDos.classList.replace("border-brand-border", "border-brand-warning");
+            }
+            const mavEl = document.getElementById("mavlink-status");
+            if (mavEl) { mavEl.textContent = "⚠ FLOOD"; mavEl.className = "text-brand-warning animate-pulse"; }
+            flightPath.setStyle({ color: '#f59e0b' }); // Amber for DoS
+            document.documentElement.style.setProperty('--hud-threat', '#f59e0b');
+
         } else if (system_status.includes("INJECTION") || system_status.includes("ROGUE")) {
-            tCmd.classList.add("active-cmd");
-            flightPath.setStyle({ color: '#A855F7' }); // Purple for Injection
-            document.documentElement.style.setProperty('--hud-threat', '#A855F7');
+            if(tCmd) {
+                tCmd.classList.add("shadow-[0_0_15px_rgba(0,240,255,0.5)]");
+                tCmd.classList.replace("bg-brand-bg", "bg-brand-danger/20"); tCmd.classList.replace("border-brand-border", "border-brand-danger");
+            }
+            flightPath.setStyle({ color: '#ef4444' }); // Purple for Injection
+            document.documentElement.style.setProperty('--hud-threat', '#ef4444');
         } else if (system_status.includes("ANOMALY")) {
-            tRpl.classList.add("active-cmd"); // Reuse active-cmd style for purple
-            flightPath.setStyle({ color: '#A855F7' }); // Purple
-            document.documentElement.style.setProperty('--hud-threat', '#A855F7');
+            if(tRpl) {
+                tRpl.classList.add("shadow-[0_0_15px_rgba(0,240,255,0.5)]");
+                tRpl.classList.replace("bg-brand-bg", "bg-brand-danger/20"); tRpl.classList.replace("border-brand-border", "border-brand-danger");
+            }
+            flightPath.setStyle({ color: '#ef4444' }); // Purple
+            document.documentElement.style.setProperty('--hud-threat', '#ef4444');
         } else {
-            flightPath.setStyle({ color: '#EF4444' });
-            document.documentElement.style.setProperty('--hud-threat', '#EF4444');
+            flightPath.setStyle({ color: '#ef4444' });
+            document.documentElement.style.setProperty('--hud-threat', '#ef4444');
         }
         
+    
     } else {
         window.currentThreatState = "NOMINAL";
-        document.getElementById("status-banner").className = "header safe";
-        document.getElementById("status-icon").className = "fa-solid fa-shield-halved";
-        document.getElementById("status-text").innerText = "[ SYSTEMS NOMINAL ] SYS.TRACKING // AIRSPACE SECURE";
-        
+        document.getElementById("status-banner").className = "flex-none bg-brand-surface/60 backdrop-blur-lg border-b border-brand-accent/50 shadow-[0_0_20px_rgba(0,229,255,0.2)] px-6 py-4 flex items-center justify-between transition-all duration-300";
+        document.getElementById("status-icon").className = "w-3 h-3 bg-brand-accent rounded-full animate-pulse";
+        document.getElementById("status-text").innerText = "GARUDAKAAVACH // IDS SENSOR FUSION";
+        document.getElementById("status-text").className = "";
+        const mavEl = document.getElementById("mavlink-status");
+        if (mavEl) { mavEl.textContent = "NOMINAL"; mavEl.className = "text-brand-accent"; }
+
         document.body.classList.remove("critical-threat-mode");
         // Flight trail cyan
-        flightPath.setStyle({ color: '#38BDF8' });
-        document.documentElement.style.setProperty('--hud-threat', '#38BDF8');
+        flightPath.setStyle({ color: '#00f0ff' });
+        document.documentElement.style.setProperty('--hud-threat', '#00f0ff');
     }
 
     // Ledger Handling
@@ -260,22 +398,27 @@ ws.onmessage = function(event) {
         const logIndex = data.incident_index || incidentLog.length;
         const threatText = data.new_incident.threat;
         
-        let threatColor = '#EF4444'; // default red
-        if (threatText.includes("GPS")) threatColor = '#EF4444'; // Red
-        else if (threatText.includes("FLOOD")) threatColor = '#F59E0B'; // Amber
-        else if (threatText.includes("INJECTION") || threatText.includes("ROGUE") || threatText.includes("ANOMALY")) threatColor = '#A855F7'; // Purple
+        let threatColor = '#ef4444'; // default red
+        if (threatText.includes("GPS")) threatColor = '#ef4444'; // Red
+        else if (threatText.includes("FLOOD")) threatColor = '#f59e0b'; // Amber
+        else if (threatText.includes("INJECTION") || threatText.includes("ROGUE") || threatText.includes("ANOMALY")) threatColor = '#ef4444'; // Purple
         
+        if (typeof spawnRadarBlip === 'function') {
+            spawnRadarBlip(threatColor, false);
+        }
+
         const tbody = document.getElementById("ledger-body");
         const row = document.createElement("tr");
+        row.className = 'hover:bg-surface-container-high/50 transition-colors';
         row.innerHTML = `
-            <td>#${logIndex}</td>
-            <td>[${data.new_incident.timestamp}]</td>
-            <td class="threat-text" style="color: ${threatColor}">
+            <td class="py-2 px-3 text-on-surface-variant font-mono">#${logIndex}</td>
+            <td class="py-2 px-3 text-tertiary-container font-mono">[${data.new_incident.timestamp}]</td>
+            <td class="py-2 px-3 font-bold" style="color: ${threatColor}">
                 <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:${threatColor}; margin-right:6px; box-shadow: 0 0 6px ${threatColor};"></span>
                 ${threatText}
             </td>
-            <td class="action-text">${data.new_incident.action}</td>
-            <td class="hash-text">${data.new_incident.hash}</td>
+            <td class="py-2 px-3 text-on-surface-variant">${data.new_incident.action}</td>
+            <td class="py-2 px-3 text-on-surface-variant font-mono text-[9px] truncate max-w-[100px]">${data.new_incident.hash}</td>
         `;
         tbody.prepend(row);
         
@@ -315,9 +458,10 @@ ws.onmessage = function(event) {
 };
 
 ws.onclose = function() {
-    document.getElementById("status-banner").className = "header threat";
-    document.getElementById("status-icon").className = "fa-solid fa-triangle-exclamation";
+    document.getElementById("status-banner").className = "flex-none bg-brand-surface/60 backdrop-blur-lg border-b border-brand-danger shadow-[0_0_20px_rgba(239,68,68,0.4)] px-6 py-4 flex items-center justify-between transition-all duration-300";
+    document.getElementById("status-icon").className = "w-3 h-3 bg-brand-danger rounded-full animate-ping";
     document.getElementById("status-text").innerText = "SYS.FAULT // CONNECTION TO DAEMON LOST";
+    document.getElementById("status-text").className = "text-brand-danger";
 };
 
 // ==========================================
@@ -343,3 +487,23 @@ document.querySelector('.btn-rtl').addEventListener("click", () => {
         alert("MANUAL OVERRIDE: RTL command sent to Daemon.");
     }
 });
+
+
+// ==========================================
+// 5. ANIMATE RF SPECTRUM
+// ==========================================
+function animateSpectrum() {
+    const barsContainer = document.getElementById('rf-spectrum-bars');
+    if (barsContainer) {
+        const bars = barsContainer.querySelectorAll('div');
+        bars.forEach((bar, index) => {
+            const isThreat = window.currentThreatState && window.currentThreatState !== "NOMINAL";
+            const minHeight = (index === 5 && isThreat) ? 80 : 10;
+            const maxHeight = (index === 5 && isThreat) ? 100 : (index === 5 ? 60 : 70);
+            const randomHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+            bar.style.height = `${randomHeight}%`;
+            bar.style.transition = 'height 0.3s ease';
+        });
+    }
+}
+setInterval(animateSpectrum, 300);

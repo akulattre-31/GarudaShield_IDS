@@ -1,192 +1,302 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PUSHPAK-IDS: Advanced Avionics</title>
-    <!-- Fonts & Icons -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Leaflet for Map -->
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Garudakaavach // Tactical IDS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@300,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Rajdhani', 'sans-serif'],
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            bg: '#0B0D14',
+                            surface: '#12151F',
+                            border: '#23283B',
+                            accent: '#00E5FF',
+                            text: '#E2E8F0',
+                            muted: '#94A3B8',
+                            danger: '#EF4444',
+                            warning: '#F59E0B',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
-    <!-- Subtle CRT Effect -->
-    <div class="scanlines"></div>
+<body class="bg-[#050A10] text-brand-text font-sans min-h-screen flex flex-col overflow-hidden selection:bg-brand-accent selection:text-black" style="background-image: radial-gradient(circle at 50% 50%, rgba(0, 229, 255, 0.05) 0%, transparent 80%), linear-gradient(rgba(0, 229, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px); background-size: 100% 100%, 30px 30px, 30px 30px; background-position: center, center, center;">
 
-    <div class="hud-container">
-        <!-- Avionics Status Banner -->
-        <div id="status-banner" class="header safe">
-            <div class="header-left">
-                <i class="fa-solid fa-shield-halved" id="status-icon"></i>
+<!-- HEADER -->
+<header id="status-banner" class="flex-none bg-brand-surface/60 backdrop-blur-lg border-b border-brand-accent/50 shadow-[0_0_20px_rgba(0,229,255,0.2)] px-6 py-4 flex items-center justify-between shadow-md transition-all duration-300">
+    <div class="flex items-center gap-4">
+        <div id="status-icon" class="w-3 h-3 bg-brand-accent rounded-full animate-pulse" style="box-shadow: 0 0 10px var(--hud-threat, #00E5FF);"></div>
+        <h1 class="text-xl font-orbitron font-bold tracking-[0.2em] uppercase text-white flex items-center gap-2">
+            <span class="material-symbols-outlined">security</span>
+            <span id="status-text">GARUDAKAAVACH // IDS SENSOR FUSION</span>
+        </h1>
+    </div>
+    <div class="flex items-center gap-6 font-mono text-sm">
+        <div class="flex items-center gap-1"><span class="text-brand-muted">ZULU:</span> <span id="zulu-clock" class="text-brand-accent">14:32:08 Z</span></div>
+        <div class="flex items-center gap-1"><span class="text-brand-muted">LAT:</span> <span id="lat-display" class="text-brand-accent">0.000000</span></div>
+        <div class="flex items-center gap-1"><span class="text-brand-muted">LON:</span> <span id="lon-display" class="text-brand-accent">0.000000</span></div>
+    </div>
+</header>
+
+<!-- MAIN WORKSPACE -->
+<main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-73px)]">
+
+    <!-- LEFT COLUMN: Telemetry & Compute (3 cols) -->
+    <aside class="lg:col-span-3 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2 pb-6">
+        
+        <!-- TELEMETRY -->
+        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col shadow-sm">
+            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center gap-2">
+                <span class="material-symbols-outlined text-[16px]">flight</span> Flight Telemetry
+            </h2>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="bg-brand-bg rounded p-3 text-center border border-brand-border/50">
+                    <div class="text-[10px] text-brand-muted mb-1 tracking-wider uppercase">Altitude (m)</div>
+                    <div id="alt-val" class="font-mono text-xl font-bold text-brand-accent">0.0</div>
+                    <div class="mt-2 flex gap-[2px] h-1.5" id="alt-segments">
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                    </div>
+                </div>
+                <div class="bg-brand-bg rounded p-3 text-center border border-brand-border/50">
+                    <div class="text-[10px] text-brand-muted mb-1 tracking-wider uppercase">Speed (m/s)</div>
+                    <div id="spd-val" class="font-mono text-xl font-bold text-brand-accent">0.0</div>
+                    <div class="mt-2 flex gap-[2px] h-1.5" id="spd-segments">
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-accent rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                        <div class="h-full w-full bg-brand-border rounded-sm"></div>
+                    </div>
+                </div>
             </div>
-            <div class="header-center" id="status-text">
-                SYS.TRACKING // AIRSPACE SECURE // PUSHPAK IDS ACTIVE
+            <div class="flex justify-between items-center text-[11px] font-mono border-t border-brand-border pt-3">
+                <span class="text-brand-muted">LATENCY: <span id="lat-val" class="text-brand-accent font-bold">18</span> ms</span>
+                <span class="text-brand-accent">STABLE LINK</span>
             </div>
-            <div class="header-right">
-                <span class="live-indicator">●</span> LIVE
+        </section>
+
+        <!-- COMPUTE & AVIONICS -->
+        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col shadow-sm">
+            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center gap-2">
+                <span class="material-symbols-outlined text-[16px]">memory</span> System Diagnostics
+            </h2>
+            
+            <div class="mb-4">
+                <div class="flex justify-between text-[11px] mb-1.5 font-mono">
+                    <span class="text-brand-muted tracking-wider">CPU LOAD</span>
+                    <span id="cpu-val-text" class="text-brand-accent font-bold">0%</span>
+                </div>
+                <div class="flex gap-1 h-8 items-end" id="cpu-segments">
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[40%]"></div></div>
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[60%]"></div></div>
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[30%]"></div></div>
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[90%]"></div></div>
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[50%]"></div></div>
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[20%]"></div></div>
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[70%]"></div></div>
+                    <div class="w-full bg-brand-bg border border-brand-border/50 rounded-sm overflow-hidden flex flex-col justify-end"><div class="w-full bg-brand-accent transition-all h-[45%]"></div></div>
+                </div>
             </div>
+
+            <div class="mb-4">
+                <div class="flex justify-between text-[11px] mb-1.5 font-mono">
+                    <span class="text-brand-muted tracking-wider">RAM BUFFER</span>
+                    <span id="ram-val-text" class="text-brand-accent font-bold">0%</span>
+                    <span id="ram-val" class="hidden">0</span>
+                </div>
+                <div class="h-2 bg-brand-bg border border-brand-border/50 rounded-full overflow-hidden">
+                    <div id="ram-fill" class="h-full bg-brand-accent transition-all" style="width: 0%"></div>
+                </div>
+            </div>
+
+
+            <div class="mt-2 pt-4 border-t border-brand-border">
+                <div class="flex justify-between text-[10px] mb-2 text-brand-muted uppercase tracking-wider">
+                    <span>MavLink Signal Activity</span>
+                    <span id="mavlink-status" class="text-brand-accent">NOMINAL</span>
+                </div>
+                <div class="flex items-end gap-[2px] h-12 w-full" id="rf-spectrum-bars">
+                    <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:30%"></div>
+                    <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:50%"></div>
+                    <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:20%"></div>
+                    <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:40%"></div>
+                    <div class="flex-1 bg-brand-accent/50 rounded-t-sm" style="height:60%"></div>
+                    <div class="flex-1 bg-brand-accent/60 rounded-t-sm" style="height:45%"></div>
+                    <div class="flex-1 bg-brand-accent/50 rounded-t-sm" style="height:35%"></div>
+                    <div class="flex-1 bg-brand-accent/40 rounded-t-sm" style="height:30%"></div>
+                </div>
+                <div class="text-[9px] text-brand-muted mt-1">Packet rate anomaly detection via eBPF ingress analysis</div>
+            </div>
+        </section>
+        
+        <!-- MANUAL OVERRIDE -->
+        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col shadow-sm">
+            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center justify-between">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">pan_tool</span> Actuators</span>
+                <span class="text-[9px] text-brand-warning border border-brand-warning/30 bg-brand-warning/10 px-1.5 py-0.5 rounded tracking-widest">AUTH L-4</span>
+            </h2>
+            <button class="btn-brake w-full mb-3 bg-brand-surface/40 hover:bg-brand-accent/20 border border-brand-accent/50 shadow-[0_0_15px_rgba(0,229,255,0.1)] hover:shadow-[0_0_25px_rgba(0,229,255,0.4)] text-brand-accent py-2.5 px-4 rounded-lg text-xs font-orbitron font-bold tracking-widest transition-all duration-300 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">front_hand</span> FORCE BRAKE
+            </button>
+            <button class="btn-rtl w-full bg-brand-danger/10 hover:bg-brand-danger/30 border border-brand-danger/50 hover:border-brand-danger shadow-[0_0_15px_rgba(239,68,68,0.2)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] text-brand-danger py-2.5 px-4 rounded-lg text-xs font-orbitron font-bold tracking-widest transition-all duration-300 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">home_pin</span> FORCE RTL
+            </button>
+        </section>
+
+    </aside>
+
+    <!-- CENTER COLUMN: Map & Ledger (6 cols) -->
+    <div class="lg:col-span-6 flex flex-col gap-6 pb-6 h-full">
+        
+        <!-- MAP PANEL -->
+        <div class="relative bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl flex-1 overflow-hidden min-h-[300px] flex flex-col shadow-sm">
+            <div id="tactical-map" class="absolute inset-0 z-0"></div>
+            
+            <div class="absolute inset-0 pointer-events-none z-[5] bg-[radial-gradient(circle,rgba(0,229,255,0.03)_0%,rgba(11,13,20,0.4)_100%)]"></div>
+            
+            <div class="absolute top-4 left-4 z-10 bg-brand-surface/90 backdrop-blur border border-brand-border px-3 py-1.5 rounded text-[10px] font-mono text-brand-accent tracking-widest shadow-lg">
+                AZIMUTH: 360° // GEO-ZONE ACTIVE
+            </div>
+            
+            <!-- Hide residualChart to keep DOM happy but UI clean -->
+            <canvas id="residualChart" class="hidden"></canvas>
         </div>
 
-        <div class="main-grid">
-            <!-- Left Column: Telemetry & Threat Matrix -->
-            <div class="left-col">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="flex-between">
-                            <span><i class="fa-solid fa-gauge-high"></i> CORE TELEMETRY</span>
-                        </div>
-                    </div>
-                    <div class="telemetry-grid">
-                        <div class="tel-item gauge-item">
-                            <div class="tel-label">ALT (MSL)</div>
-                            <div class="gauge-container">
-                                <svg class="circular-chart" viewBox="0 0 36 36">
-                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                    <path class="circle" id="alt-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                </svg>
-                                <div class="percentage" id="alt-val">0.00m</div>
-                            </div>
-                        </div>
-                        <div class="tel-item gauge-item">
-                            <div class="tel-label">VEL (GND)</div>
-                            <div class="gauge-container">
-                                <svg class="circular-chart" viewBox="0 0 36 36">
-                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                    <path class="circle" id="spd-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                </svg>
-                                <div class="percentage" id="spd-val">0.00m/s</div>
-                            </div>
-                        </div>
-                        <!-- Pitch and Roll removed as they do not apply without IMU data -->
-                        <div class="tel-item gauge-item">
-                            <div class="tel-label">CPU LOAD</div>
-                            <div class="gauge-container">
-                                <svg class="circular-chart" viewBox="0 0 36 36">
-                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                    <path class="circle" id="cpu-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                </svg>
-                                <div class="percentage" id="cpu-val-text">0%</div>
-                            </div>
-                        </div>
-                        <div class="tel-item gauge-item">
-                            <div class="tel-label">RAM LOAD</div>
-                            <div class="gauge-container">
-                                <svg class="circular-chart" viewBox="0 0 36 36">
-                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                    <path class="circle" id="ram-gauge" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                </svg>
-                                <div class="percentage" id="ram-val-text">0%</div>
-                            </div>
-                        </div>
-                        <div class="tel-item" style="grid-column: span 2;">
-                            <div class="tel-label">LINK PING</div>
-                            <div class="tel-value"><span id="lat-val">0</span><span class="unit">ms</span></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="flex-between">
-                            <span><i class="fa-solid fa-radar"></i> THREAT MATRIX</span>
-                        </div>
-                    </div>
-                    <div class="threat-matrix">
-                        <div class="threat-item" id="threat-gps">
-                            <div class="threat-led"></div>
-                            <div class="threat-name">GPS KINEMATIC SPOOF</div>
-                        </div>
-                        <div class="threat-item" id="threat-dos">
-                            <div class="threat-led"></div>
-                            <div class="threat-name">MAVLINK RATE FLOOD</div>
-                        </div>
-                        <div class="threat-item" id="threat-cmd">
-                            <div class="threat-led"></div>
-                            <div class="threat-name">UNAUTH COMMAND INJ.</div>
-                        </div>
-                        <div class="threat-item" id="threat-rpl">
-                            <div class="threat-led"></div>
-                            <div class="threat-name">ZERO DAY / PAYLOAD ANOMALY</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="flex-between">
-                            <span><i class="fa-solid fa-triangle-exclamation"></i> MANUAL OVERRIDE</span>
-                        </div>
-                    </div>
-                    <div class="override-controls">
-                        <button class="btn-override btn-brake"><i class="fa-solid fa-hand"></i> FORCE BRAKE</button>
-                        <button class="btn-override btn-rtl"><i class="fa-solid fa-house-medical-flag"></i> FORCE RTL</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Center Column: Tactical Map & Math -->
-            <div class="center-col">
-                <div class="panel map-panel">
-                    <div class="panel-header">
-                        <div class="flex-between">
-                            <span><i class="fa-solid fa-map-location-dot"></i> TACTICAL AIRSPACE MAP</span>
-                        </div>
-                    </div>
-                    <div id="tactical-map"></div>
-                    <div class="map-overlay">
-                        <div class="coord-display">LAT: <span id="lat-display">0.000000</span></div>
-                        <div class="coord-display">LON: <span id="lon-display">0.000000</span></div>
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="flex-between">
-                            <span><i class="fa-solid fa-wave-square"></i> GPS TAMPER SENSOR (KINEMATIC RESIDUAL)</span>
-                        </div>
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="residualChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Action Ledger (Bottom) -->
-        <div class="panel ledger-panel">
-            <div class="panel-header flex-between">
-                <div><i class="fa-solid fa-list-check"></i> AUTONOMOUS INCIDENT LOG [SHA-256 SECURED]</div>
-                <button id="export-btn" class="export-btn"><i class="fa-solid fa-download"></i> DUMP FORENSICS</button>
-            </div>
-            <div class="table-container">
-                <table>
-                    <thead>
+        <!-- INCIDENT LEDGER -->
+        <div class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col h-[280px] shrink-0 shadow-sm">
+            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-3 border-b border-brand-border pb-2 flex items-center justify-between">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">list_alt</span> Incident Ledger</span>
+                <button id="export-btn" class="text-[10px] px-2.5 py-1 bg-brand-bg border border-brand-border hover:border-brand-accent text-brand-text hover:text-brand-accent rounded transition-colors flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">download</span> Export JSON
+                </button>
+            </h2>
+            <div class="flex-1 overflow-auto custom-scrollbar">
+                <table class="w-full text-left text-[11px]">
+                    <thead class="sticky top-0 bg-brand-surface z-10 text-brand-muted border-b border-brand-border">
                         <tr>
-                            <th>REPORT #</th>
-                            <th>T-STAMP</th>
-                            <th>THREAT VECTOR</th>
-                            <th>SYSTEM OVERRIDE / MITIGATION</th>
-                            <th>SECURE HASH (EVIDENCE)</th>
+                            <th class="py-2 px-3 font-medium tracking-wider">ID</th>
+                            <th class="py-2 px-3 font-medium tracking-wider">TIME</th>
+                            <th class="py-2 px-3 font-medium tracking-wider">THREAT</th>
+                            <th class="py-2 px-3 font-medium tracking-wider">ACTION</th>
+                            <th class="py-2 px-3 font-medium tracking-wider">HASH</th>
                         </tr>
                     </thead>
-                    <tbody id="ledger-body">
+                    <tbody id="ledger-body" class="font-mono text-gray-300">
                         <!-- Rows injected via JS -->
                     </tbody>
                 </table>
             </div>
         </div>
+
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <!-- RIGHT COLUMN: Threat Matrix (3 cols) -->
+    <aside class="lg:col-span-3 flex flex-col gap-6 pb-6">
+        
+        <section class="bg-brand-surface/40 backdrop-blur-xl border border-brand-accent/30 shadow-[0_0_20px_rgba(0,229,255,0.15)] hover:shadow-[0_0_30px_rgba(0,229,255,0.3)] transition-shadow duration-300 rounded-xl p-5 flex flex-col h-full shadow-sm">
+            <h2 class="font-orbitron text-xs uppercase text-brand-accent drop-shadow-[0_0_5px_rgba(0,229,255,0.5)] tracking-widest text-brand-muted mb-4 border-b border-brand-border pb-2 flex items-center justify-between">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">gavel</span> Threat Matrix</span>
+                <span class="px-2 py-0.5 bg-brand-danger/10 text-brand-danger border border-brand-danger/30 rounded text-[9px] tracking-widest">ACTIVE</span>
+            </h2>
+            
+            <div class="flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
+                <div id="threat-gps" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
+                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
+                        <span>GPS Spoofing</span>
+                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
+                    </div>
+                    <p class="text-[11px] text-brand-muted leading-relaxed">Pseudo-range and carrier phase analysis on L1/L2 band nominal.</p>
+                </div>
+                
+                <div id="threat-dos" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
+                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
+                        <span>MAVLink Flood</span>
+                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
+                    </div>
+                    <p class="text-[11px] text-brand-muted leading-relaxed">eBPF ingress traffic analysis nominal. No rate anomalies detected.</p>
+                </div>
+                
+                <div id="threat-cmd" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
+                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
+                        <span>Cmd Injection</span>
+                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
+                    </div>
+                    <p class="text-[11px] text-brand-muted leading-relaxed">Cryptographic Ed25519 signature verification active. Zero execution blocks.</p>
+                </div>
+                
+                <div id="threat-rpl" class="bg-brand-bg p-3 border-l-2 border-brand-border rounded-r transition-all duration-300">
+                    <div class="flex justify-between items-center text-[10px] mb-1.5 font-bold uppercase tracking-wider">
+                        <span>Replay Attack</span>
+                        <span class="text-[9px] px-1.5 py-0.5 bg-brand-border text-brand-muted rounded">SECURE</span>
+                    </div>
+                    <p class="text-[11px] text-brand-muted leading-relaxed">Nonce sequence and temporal window checks passed without incident.</p>
+                </div>
+            </div>
+            
+            <div class="mt-auto pt-4 border-t border-brand-border text-[10px] text-brand-muted text-center tracking-widest uppercase flex items-center justify-center gap-2">
+                <span class="w-1.5 h-1.5 bg-brand-accent rounded-full animate-pulse"></span>
+                System Monitoring Active
+            </div>
+        </section>
+
+    </aside>
+
+</main>
+
+<style>
+/* Clean scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #23283B; border-radius: 4px; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #00E5FF; }
+
+/* Threat Mode background */
+body.critical-threat-mode {
+    background-color: #1a0505;
+    transition: background-color 0.2s ease;
+}
+
+/* Leaflet map styles for dark sleek look */
+.leaflet-layer,
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out,
+.leaflet-control-attribution {
+  filter: brightness(0.85) saturate(1.2) contrast(1.05);
+}
+.leaflet-container { background: #0B0D14 !important; font-family: 'JetBrains Mono', monospace; }
+.leaflet-popup-content-wrapper { background: #12151F; color: #E2E8F0; border: 1px solid #23283B; border-radius: 4px; }
+.leaflet-popup-tip { background: #12151F; }
+</style>
+
+<script src="/static/js/app.js"></script>
 </body>
 </html>

@@ -189,25 +189,24 @@ async def link_monitor_loop():
 async def mavlink_stream_loop(port: int):
     """
     Direct MAVLink telemetry ingress from SITL / MAVProxy (e.g. ports 14550, 14551).
-    Synchronizes physical drone motion directly from the simulator.
+    Synchronizes physical drone motion directly from the simulator in real time.
     """
     global last_udp_time
-    loop = asyncio.get_running_loop()
     try:
         from pymavlink import mavutil
         conn = mavutil.mavlink_connection(f"udpin:0.0.0.0:{port}")
-        print(f"[UI Bridge] 🛰️ MAVLink listener online on UDP {port} (ready for SITL/MAVProxy)...")
+        conn.port.setblocking(False)
+        print(f"[UI Bridge] 🛰️ MAVLink listener online on UDP {port} (ready for SITL/MAVProxy)...", flush=True)
     except Exception as e:
-        print(f"[UI Bridge] MAVLink listener port {port} note: {e}")
+        print(f"[UI Bridge] MAVLink listener port {port} note: {e}", flush=True)
         return
 
     while True:
         try:
-            msg = await loop.run_in_executor(None, lambda: conn.recv_match(
+            msg = conn.recv_match(
                 type=['GLOBAL_POSITION_INT', 'VFR_HUD', 'ATTITUDE', 'HEARTBEAT'],
-                blocking=True,
-                timeout=0.25
-            ))
+                blocking=False
+            )
             if msg:
                 mtype = msg.get_type()
                 if mtype == 'GLOBAL_POSITION_INT':
@@ -242,8 +241,11 @@ async def mavlink_stream_loop(port: int):
                     }
                     for ws in list(active_websockets):
                         asyncio.create_task(ws.send_json(telemetry_frame))
+                await asyncio.sleep(0.01)
+            else:
+                await asyncio.sleep(0.04)  # ~25Hz poll rate when idle
         except Exception:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
 
 @app.on_event("startup")
 async def startup_event():

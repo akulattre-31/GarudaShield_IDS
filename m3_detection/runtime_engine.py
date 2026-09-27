@@ -86,6 +86,8 @@ print("[M3] Signed alerts → M5, signed notifications ← M4")
 
 # State
 last_alert_time = 0
+last_failsafe_dispatch = {}   # attack_type -> last time we actually sent a mode command
+FAILSAFE_DISPATCH_COOLDOWN_SEC = 15.0   # don't re-send the same mode command more often than this
 buffer = deque(maxlen=500)
 unknown_anomalies = []
 attack_markers = {}
@@ -173,11 +175,27 @@ def emit_alert(master, attack_type, confidence, source, features=None):
 
     # Dispatch failsafe to the drone FIRST, so the dashboard alert can
     # report which action was actually taken alongside the detection.
+    # Only actually re-send the mode command if we haven't dispatched
+    # this same attack_type recently — otherwise a persistent condition
+    # spams the drone with the identical MAV_CMD_DO_SET_MODE every
+    # ALERT_COOLDOWN_SEC, which is noisy and pointless once it's already
+    # in that mode.
+    global last_failsafe_dispatch
     failsafe_result = False
-    try:
-        failsafe_result = dispatch_failsafe(master, attack_type, confidence, source=source)
-    except Exception as e:
-        print(f"[M3] Failsafe error: {e}")
+    now_ts = time.time()
+    last_dispatch_for_type = last_failsafe_dispatch.get(attack_type, 0)
+    if now_ts - last_dispatch_for_type >= FAILSAFE_DISPATCH_COOLDOWN_SEC:
+        try:
+            failsafe_result = dispatch_failsafe(master, attack_type, confidence, source=source)
+            if failsafe_result:
+                last_failsafe_dispatch[attack_type] = now_ts
+        except Exception as e:
+            print(f"[M3] Failsafe error: {e}")
+    else:
+        remaining = FAILSAFE_DISPATCH_COOLDOWN_SEC - (now_ts - last_dispatch_for_type)
+        print(f"[M3] ⏭  {attack_type} failsafe already dispatched "
+              f"{now_ts - last_dispatch_for_type:.1f}s ago — "
+              f"skipping re-send ({remaining:.1f}s cooldown left)")
 
     failsafe_mode = failsafe_result[0] if failsafe_result else None
 

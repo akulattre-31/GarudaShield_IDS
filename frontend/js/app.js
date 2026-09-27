@@ -118,7 +118,9 @@ const droneCustomIcon = L.divIcon({
             <!-- Floating Mini 3D Glass Cube beside the Drone -->
             <div class="drone-cube-hud" id="drone-cube-hud">
                 <div class="drone-cube-title">
-                    <span class="drone-cube-dot"></span>
+                    <svg class="w-3 h-3 text-cyan-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
                     <span id="cube-status-title">DRONE-01 // ACTIVE</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;">
@@ -132,6 +134,10 @@ const droneCustomIcon = L.divIcon({
                 <div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;border-top:1px solid rgba(255,255,255,0.08);margin-top:3px;padding-top:2px;">
                     <span style="color:#8295b5;">ALT</span>
                     <span id="cube-alt" style="color:#38bdf8;font-weight:700;">150.0m</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:8px;font-size:9px;margin-top:2px;color:#a855f7;">
+                    <span style="color:#8295b5;">ZONE</span>
+                    <span id="cube-zone" style="font-weight:600;">SECTOR A // CANBERRA</span>
                 </div>
             </div>
         </div>
@@ -162,6 +168,7 @@ const ALERT_THRESHOLD = 16.81;
 let anomalyData = Array(CHART_HISTORY).fill(1.2);
 let currentResidual = 1.2;
 let targetResidual = 1.2;
+let spikeDecayLockUntil = 0;
 let anomalyChart = null;
 let currentChartAlerting = false;
 
@@ -249,13 +256,14 @@ setInterval(() => {
 }, 100);
 
 function triggerWaveformSpike(spikeValue, theme) {
-    targetResidual = spikeValue || 34.5;
-    currentResidual = Math.max(currentResidual, targetResidual * 0.85);
+    targetResidual = spikeValue || 36.5;
+    currentResidual = Math.max(currentResidual, targetResidual * 0.88);
+    spikeDecayLockUntil = Date.now() + 3200; // Hold spike so subsequent nominal telemetry frames do not squash it
 
     const card = document.getElementById('anomaly-card');
     if (card) {
         card.classList.add('chart-spike-alert');
-        setTimeout(() => card.classList.remove('chart-spike-alert'), 1200);
+        setTimeout(() => card.classList.remove('chart-spike-alert'), 1400);
     }
 }
 
@@ -342,7 +350,10 @@ ws.onmessage = function(event) {
 
     if (!linkConnected || data.system_status === 'LINK_SEVERED') {
         // Stream disconnected / waiting for Blue Team: Stop drone and show status!
-        if (icon) icon.className = 'w-3.5 h-3.5 bg-amber-400 rounded-full animate-pulse';
+        if (icon) {
+            icon.className = 'w-3.5 h-3.5 bg-amber-400 rounded-full animate-pulse';
+            icon.style.backgroundColor = '';
+        }
         if (statusText) {
             statusText.textContent = 'TELEMETRY LINK SEVERED // WAITING FOR INGRESS';
             statusText.style.color = '#ff9900';
@@ -353,10 +364,21 @@ ws.onmessage = function(event) {
         if (mapStatus) {
             mapStatus.textContent = 'STREAM INACTIVE — DRONE STATIONARY';
             mapStatus.className = 'text-amber-400 font-semibold';
+            mapStatus.style.color = '';
         }
         if (cubeTitle) {
             cubeTitle.textContent = 'DRONE-01 // STATIONARY';
         }
+        const cubeZone = document.getElementById('cube-zone');
+        if (cubeZone) {
+            cubeZone.textContent = 'STATIONARY // HOVER';
+            cubeZone.style.color = '#ff9900';
+        }
+        if (banner) {
+            banner.style.borderBottomColor = 'rgba(255, 153, 0, 0.35)';
+            banner.style.boxShadow = '';
+        }
+        document.body.classList.remove('critical-threat-mode');
 
         const spdVal = document.getElementById('spd-val');
         if (spdVal) spdVal.innerHTML = '0.0 m/s';
@@ -480,7 +502,9 @@ ws.onmessage = function(event) {
         window._activeAttackTheme = theme;
         triggerWaveformSpike(residual, theme);
     } else {
-        targetResidual = Math.max(1.1, residual);
+        if (Date.now() > spikeDecayLockUntil) {
+            targetResidual = Math.max(1.1, residual);
+        }
     }
 
     // ── Threat State & Banner Management ──
@@ -549,6 +573,18 @@ function handleThreatState(status, incidentDetails) {
         document.documentElement.style.setProperty('--hud-threat', '#00f0ff');
         flightPath.setStyle({ color: '#00f0ff' });
         document.body.classList.remove('critical-threat-mode');
+
+        // Reset Threat Metrics
+        const mgps = document.getElementById('metric-gps');
+        const mdos = document.getElementById('metric-dos');
+        const mcmd = document.getElementById('metric-cmd');
+        const mrpl = document.getElementById('metric-rpl');
+        const mdrift = document.getElementById('metric-drift');
+        if (mgps) mgps.innerHTML = 'χ² 1.2 // EKF Locked';
+        if (mdos) mdos.innerHTML = '22 pkt/s // Clean';
+        if (mcmd) mcmd.innerHTML = '0 Rejected // Active';
+        if (mrpl) mrpl.innerHTML = '&lt;40ms // Fresh';
+        if (mdrift) mdrift.innerHTML = '0.03m // Decoupled: No';
 
         const mapStatus = document.getElementById('map-drone-status');
         if (mapStatus) {
@@ -633,103 +669,147 @@ function recordIncident(details, lat, lon) {
         : '96%';
 
     const hash = '0x' + btoa(`${details.type}${Date.now()}`).slice(0, 10).toLowerCase();
+    const failsafeMode = details.failsafe_mode || (theme.id === 'gps' || theme.id === 'injection' ? 'BRAKE' : (theme.id === 'drift' ? 'LAND' : 'RTL'));
 
-    // Increment counter in Threat Matrix
+    // Increment counter & update status in Threat Matrix
     const rowEl = document.getElementById(theme.rowId);
     if (rowEl) {
         const counterEl = rowEl.querySelector('.event-counter');
+        const curCount = parseInt(rowEl.dataset.count || '0', 10) + 1;
+        rowEl.dataset.count = curCount;
         if (counterEl) {
-            const curCount = parseInt(rowEl.dataset.count || '0', 10) + 1;
-            rowEl.dataset.count = curCount;
-            counterEl.textContent = `${curCount} incident${curCount > 1 ? 's' : ''} logged`;
+            counterEl.innerHTML = `<span style="color:${theme.color};font-weight:700;">Report #${logIndex}</span> (${curCount} logged)`;
         }
+    }
+
+    // Update dynamic metric preview on that threat card
+    const metricEl = document.getElementById(`metric-${theme.id}`);
+    if (metricEl) {
+        if (theme.id === 'gps') metricEl.innerHTML = `<span style="color:#ff2a55;font-weight:700;">χ² ${(currentResidual || 36.8).toFixed(1)} // SPIKE DETECTED</span>`;
+        if (theme.id === 'dos') metricEl.innerHTML = `<span style="color:#ff9900;font-weight:700;">480 pkt/s // FLOOD INGRESS</span>`;
+        if (theme.id === 'injection') metricEl.innerHTML = `<span style="color:#a855f7;font-weight:700;">INVALID SIG // REJECTED</span>`;
+        if (theme.id === 'replay') metricEl.innerHTML = `<span style="color:#00e5ff;font-weight:700;">STALE NONCE // DISCARDED</span>`;
+        if (theme.id === 'drift') metricEl.innerHTML = `<span style="color:#10b981;font-weight:700;">Δ 14.2m // EKF DECOUPLED</span>`;
     }
 
     // ── Drop Colored Glowing Attack Dot Marker on Leaflet Map ──
     let mapMarkerObj = null;
-    if (lat && lon) {
-        const dotHtml = `
-            <div style="position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">
-                <div style="position:absolute;width:100%;height:100%;border-radius:50%;background:${theme.color};opacity:0.6;animation:attack-beacon 1.8s ease-out infinite;"></div>
-                <div style="width:13px;height:13px;border-radius:50%;background:${theme.color};border:2px solid #ffffff;box-shadow:0 0 10px ${theme.color};z-index:2;"></div>
+    let dropLat = (lat !== undefined && lat !== null && !isNaN(lat)) ? lat : lastKnownLat;
+    let dropLon = (lon !== undefined && lon !== null && !isNaN(lon)) ? lon : lastKnownLon;
+
+    // Tactical spatial distribution for stationary/simulated bursts so multiple dots don't stack on exact same pixel
+    if (attackMarkers.some(m => Math.abs(m.lat - dropLat) < 0.00003 && Math.abs(m.lon - dropLon) < 0.00003)) {
+        const angle = (logIndexNum * 137.5) * (Math.PI / 180);
+        const radiusDeg = 0.00022 + (logIndexNum % 5) * 0.00007;
+        dropLat = dropLat + Math.sin(angle) * radiusDeg;
+        dropLon = dropLon + Math.cos(angle) * radiusDeg;
+    }
+
+    const dotHtml = `
+        <div style="position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
+            <div style="position:absolute;width:100%;height:100%;border-radius:50%;background:${theme.color};opacity:0.65;animation:attack-beacon 1.8s ease-out infinite;"></div>
+            <div style="width:13px;height:13px;border-radius:50%;background:${theme.color};border:2px solid #ffffff;box-shadow:0 0 10px ${theme.color};z-index:2;"></div>
+        </div>
+    `;
+    const dotIcon = L.divIcon({
+        className: 'attack-marker-glow',
+        html: dotHtml,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+
+    const popupHtml = `
+        <div class="attack-popup-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">
+                <span class="report-pill" style="color:${theme.color};border-color:${theme.color}50;background:${theme.color}20">
+                    REPORT #${logIndex}
+                </span>
+                <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;">${timeStr} Local</span>
             </div>
-        `;
-        const dotIcon = L.divIcon({
-            className: 'attack-marker-glow',
-            html: dotHtml,
-            iconSize: [22, 22],
-            iconAnchor: [11, 11]
-        });
-
-        const marker = L.marker([lat, lon], { icon: dotIcon }).addTo(map);
-        marker.bindPopup(`
-            <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;padding:4px 6px;">
-                <div style="font-weight:800;color:${theme.color};margin-bottom:4px;display:flex;align-items:center;gap:5px;font-family:'Outfit',sans-serif;">
-                    <span style="font-family:'JetBrains Mono',monospace;">#${logIndex}</span> — ${theme.name}
-                </div>
-                <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">
-                    <div><strong>Confidence:</strong> ${confPct}</div>
-                    <div><strong>Timestamp:</strong> ${timeStr} (Local)</div>
-                    <div><strong>Countermeasure:</strong> ${theme.countermeasure}</div>
-                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#94a3b8;margin-top:3px;">
-                        ${lat.toFixed(6)}°, ${lon.toFixed(6)}°
-                    </div>
+            <div style="font-weight:800;color:${theme.color};font-size:12px;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;">
+                ${theme.name}
+            </div>
+            <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">
+                <div><strong>Confidence:</strong> <span style="color:#00f0ff;">${confPct}</span></div>
+                <div><strong>Countermeasure:</strong> ${theme.countermeasure}</div>
+                <div><strong>Auto Failsafe:</strong> <span style="color:#34d399;font-weight:700;">${failsafeMode}</span></div>
+                <div><strong>Log Evidence:</strong> Saved as Forensic Incident Report #${logIndex}</div>
+                <div style="margin-top:4px;padding:3px 6px;border-radius:6px;background:rgba(255,255,255,0.04);font-size:9.5px;color:#94a3b8;font-family:'JetBrains Mono',monospace;">
+                    ${dropLat.toFixed(6)}°, ${dropLon.toFixed(6)}°
                 </div>
             </div>
-        `);
+        </div>
+    `;
 
-        mapMarkerObj = {
-            marker,
-            type: theme.id,
-            typeName: theme.name,
-            logIndex,
-            lat,
-            lon
-        };
+    const marker = L.marker([dropLat, dropLon], { icon: dotIcon }).addTo(map);
+    marker.bindPopup(popupHtml);
 
-        // ── ENFORCE RETENTION RULES ──
-        // 1. Same attack type: keep ONLY past 5 recorded on the map
-        const sameTypeMarkers = attackMarkers.filter(m => m.type === theme.id);
-        if (sameTypeMarkers.length >= 5) {
-            const oldestOfType = sameTypeMarkers[0];
-            map.removeLayer(oldestOfType.marker);
-            attackMarkers = attackMarkers.filter(m => m !== oldestOfType);
-        }
+    mapMarkerObj = {
+        marker,
+        type: theme.id,
+        typeName: theme.name,
+        logIndex,
+        lat: dropLat,
+        lon: dropLon,
+        popupHtml
+    };
 
-        // 2. Across all different attacks: retain at most 10 total on the map
-        if (attackMarkers.length >= 10) {
-            const oldestOverall = attackMarkers.shift();
-            map.removeLayer(oldestOverall.marker);
-        }
+    // ── ENFORCE STRICT RETENTION RULES ──
+    // 1. Same attack type: keep ONLY past 5 recorded on the map
+    const sameTypeMarkers = attackMarkers.filter(m => m.type === theme.id);
+    if (sameTypeMarkers.length >= 5) {
+        const oldestOfType = sameTypeMarkers[0];
+        map.removeLayer(oldestOfType.marker);
+        attackMarkers = attackMarkers.filter(m => m !== oldestOfType);
+    }
 
-        attackMarkers.push(mapMarkerObj);
+    // 2. Across all different attacks: retain at most 10 total on the map
+    if (attackMarkers.length >= 10) {
+        const oldestOverall = attackMarkers.shift();
+        map.removeLayer(oldestOverall.marker);
+    }
+
+    attackMarkers.push(mapMarkerObj);
+
+    // Update Forensics Summary counter in Matrix
+    const summaryTotalEl = document.getElementById('matrix-total-reports');
+    if (summaryTotalEl) {
+        summaryTotalEl.textContent = `${logIndexNum} Logged (${attackMarkers.length} on Map)`;
     }
 
     // ── Add to Forensic Incident Ledger Table ──
     const row = document.createElement('tr');
     row.className = 'hover:bg-slate-800/40 transition-colors cursor-pointer group';
     row.innerHTML = `
-        <td class="py-2.5 px-3 text-cyan-300 font-bold">#${logIndex}</td>
+        <td class="py-2.5 px-3 text-cyan-300 font-bold">Report #${logIndex}</td>
         <td class="py-2.5 px-3 text-brand-muted font-mono">${timeStr}</td>
         <td class="py-2.5 px-3 font-semibold" style="color: ${theme.color}">
             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${theme.color};margin-right:6px;box-shadow:0 0 6px ${theme.color};"></span>
             ${theme.name} <span class="text-[10px] text-brand-muted">(${confPct})</span>
         </td>
-        <td class="py-2.5 px-3 text-slate-300">${theme.countermeasure}</td>
+        <td class="py-2.5 px-3 text-slate-300">
+            <span>${theme.countermeasure}</span>
+            <span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] bg-slate-800 border border-slate-700 text-emerald-400 font-bold">${failsafeMode}</span>
+        </td>
         <td class="py-2.5 px-3 font-mono text-[9px] text-cyan-400/80 truncate max-w-[90px]">${hash}</td>
     `;
 
-    // Clicking row centers map on that attack's dot
+    // Clicking row centers map on that attack's dot & opens popup
     row.addEventListener('click', () => {
-        if (mapMarkerObj) {
-            map.flyTo([lat, lon], 18, { animate: true, duration: 1.0 });
-            mapMarkerObj.marker.openPopup();
+        map.flyTo([dropLat, dropLon], 18, { animate: true, duration: 0.8 });
+        if (map.hasLayer(marker)) {
+            marker.openPopup();
+        } else {
+            L.popup()
+                .setLatLng([dropLat, dropLon])
+                .setContent(popupHtml)
+                .openOn(map);
         }
     });
 
     tbody.prepend(row);
 
-    // Keep visible ledger entries tidy (max 10 rows)
+    // Keep visible ledger entries tidy (max 10 rows in view)
     while (tbody.children.length > 10) {
         tbody.removeChild(tbody.lastChild);
     }
@@ -741,8 +821,9 @@ function recordIncident(details, lat, lon) {
         type: theme.name,
         confidence: confPct,
         action: theme.countermeasure,
+        failsafe_mode: failsafeMode,
         hash,
-        coordinates: { lat, lon }
+        coordinates: { lat: dropLat, lon: dropLon }
     });
 }
 
@@ -880,20 +961,29 @@ function animateRfSpectrum() {
 }
 setInterval(animateRfSpectrum, 280);
 
-// Sleek Liquid Glassmorphic Toast Notification
+// Sleek Liquid Glassmorphic Toast Notification Stacker
 function showOperatorToast(message, color) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+
     const toast = document.createElement('div');
-    toast.className = 'fixed bottom-6 right-6 z-50 glass-card px-4 py-3.5 rounded-xl flex items-center gap-3 border shadow-2xl transition-all duration-300 max-w-md';
-    toast.style.borderColor = color || '#00f0ff';
-    toast.style.boxShadow = `0 10px 30px rgba(0,0,0,0.7), 0 0 20px ${color || '#00f0ff'}30`;
+    toast.className = 'operator-toast';
+    toast.style.setProperty('--toast-color', color || '#00f0ff');
+    toast.style.setProperty('--toast-glow', `${color || '#00f0ff'}40`);
     toast.innerHTML = `
-        <span class="material-symbols-outlined text-[20px]" style="color:${color || '#00f0ff'}">verified</span>
+        <span class="material-symbols-outlined text-[20px] shrink-0" style="color:${color || '#00f0ff'}">verified</span>
         <span class="text-xs font-mono text-white leading-snug">${message}</span>
     `;
-    document.body.appendChild(toast);
+
+    container.appendChild(toast);
+
     setTimeout(() => {
         toast.style.opacity = '0';
-        toast.style.transform = 'translateY(12px)';
-        setTimeout(() => toast.remove(), 400);
+        toast.style.transform = 'translateY(12px) scale(0.95)';
+        setTimeout(() => toast.remove(), 350);
     }, 4500);
 }

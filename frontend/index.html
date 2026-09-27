@@ -20,6 +20,7 @@
                     fontFamily: {
                         sans:    ['Plus Jakarta Sans', 'sans-serif'],
                         display: ['Syne', 'Outfit', 'sans-serif'],
+                        tech:    ['Space Grotesk', 'Outfit', 'sans-serif'],
                         mono:    ['JetBrains Mono', 'monospace'],
                     },
                     colors: {
@@ -46,7 +47,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 
@@ -369,7 +369,7 @@
                 <table class="w-full text-left text-[11px]">
                     <thead class="sticky top-0 z-10 font-mono bg-brand-surface/95 backdrop-blur-md">
                         <tr class="text-brand-muted border-b border-brand-border/60">
-                            <th class="py-2.5 px-3 font-semibold tracking-wider">#</th>
+                            <th class="py-2.5 px-3 font-semibold tracking-wider">Report #</th>
                             <th class="py-2.5 px-3 font-semibold tracking-wider">Time</th>
                             <th class="py-2.5 px-3 font-semibold tracking-wider">Attack Signature</th>
                             <th class="py-2.5 px-3 font-semibold tracking-wider">Countermeasure</th>
@@ -390,7 +390,7 @@
 
         <section class="glass-card p-5 flex flex-col gap-3.5">
             <div class="flex items-center justify-between pb-3 border-b border-brand-border/60">
-                <h2 class="font-display text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                <h2 class="font-tech text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">verified_user</span>
                     Threat Watch Matrix
                 </h2>
@@ -404,16 +404,20 @@
                 <div class="flex justify-between items-center mb-1.5">
                     <div class="flex items-center gap-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#ff2a55] shadow-[0_0_8px_#ff2a55]"></span>
-                        <span class="font-display font-bold text-[13px] text-white">GPS Spoofing</span>
+                        <span class="font-tech font-bold text-[13px] text-[#ff2a55] drop-shadow-[0_0_8px_rgba(255,42,85,0.45)]">GPS Spoofing</span>
                     </div>
                     <span class="threat-badge-safe">Clear</span>
                 </div>
-                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
                     Compares satellite coordinates against onboard inertial Kalman filters. Forged or jumped coordinates trip instant physical position lock.
                 </p>
+                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                    <span class="text-brand-muted">Sensor Stream:</span>
+                    <span id="metric-gps" class="text-rose-400 font-semibold">χ² 1.2 // EKF Locked</span>
+                </div>
                 <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-rose-300 hover:bg-rose-950/50" data-attack="GPS_SPOOFING">
+                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-rose-300 border border-rose-500/40 hover:bg-rose-950/50" data-attack="GPS_SPOOFING">
                         Test Spike
                     </button>
                 </div>
@@ -424,16 +428,20 @@
                 <div class="flex justify-between items-center mb-1.5">
                     <div class="flex items-center gap-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#ff9900] shadow-[0_0_8px_#ff9900]"></span>
-                        <span class="font-display font-bold text-[13px] text-white">MAVLink Rate Flood</span>
+                        <span class="font-tech font-bold text-[13px] text-[#ff9900] drop-shadow-[0_0_8px_rgba(255,153,0,0.45)]">MAVLink Rate Flood</span>
                     </div>
                     <span class="threat-badge-safe">Clear</span>
                 </div>
-                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
                     Kernel-level eBPF packet inspection. Throttles high-frequency command floods (DoS) aimed at overwhelming flight microcontroller loops.
                 </p>
+                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                    <span class="text-brand-muted">eBPF Packet Ingress:</span>
+                    <span id="metric-dos" class="text-amber-400 font-semibold">22 pkt/s // Clean</span>
+                </div>
                 <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-amber-300 hover:bg-amber-950/50" data-attack="MAVLINK_FLOOD">
+                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-amber-300 border border-amber-500/40 hover:bg-amber-950/50" data-attack="MAVLINK_FLOOD">
                         Test Spike
                     </button>
                 </div>
@@ -444,16 +452,20 @@
                 <div class="flex justify-between items-center mb-1.5">
                     <div class="flex items-center gap-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#a855f7] shadow-[0_0_8px_#a855f7]"></span>
-                        <span class="font-display font-bold text-[13px] text-white">Command Injection</span>
+                        <span class="font-tech font-bold text-[13px] text-[#a855f7] drop-shadow-[0_0_8px_rgba(168,85,247,0.45)]">Command Injection</span>
                     </div>
                     <span class="threat-badge-safe">Clear</span>
                 </div>
-                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
                     Validates cryptographic Ed25519 signatures on flight commands. Unsigned or rogue heading instructions are dropped before autopilot execution.
                 </p>
+                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                    <span class="text-brand-muted">Ed25519 Validation:</span>
+                    <span id="metric-cmd" class="text-purple-400 font-semibold">0 Rejected // Active</span>
+                </div>
                 <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-purple-300 hover:bg-purple-950/50" data-attack="COMMAND_INJECTION">
+                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-purple-300 border border-purple-500/40 hover:bg-purple-950/50" data-attack="COMMAND_INJECTION">
                         Test Spike
                     </button>
                 </div>
@@ -464,16 +476,20 @@
                 <div class="flex justify-between items-center mb-1.5">
                     <div class="flex items-center gap-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]"></span>
-                        <span class="font-display font-bold text-[13px] text-white">Replay Attack</span>
+                        <span class="font-tech font-bold text-[13px] text-[#00e5ff] drop-shadow-[0_0_8px_rgba(0,229,255,0.45)]">Replay Attack</span>
                     </div>
                     <span class="threat-badge-safe">Clear</span>
                 </div>
-                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
                     Enforces temporal freshness and rolling nonce counters. Captured valid packets retransmitted by an adversary expire and are discarded.
                 </p>
+                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                    <span class="text-brand-muted">Rolling Nonce Window:</span>
+                    <span id="metric-rpl" class="text-cyan-300 font-semibold">&lt;40ms // Fresh</span>
+                </div>
                 <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-cyan-300 hover:bg-cyan-950/50" data-attack="REPLAY_ATTACK">
+                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-cyan-300 border border-cyan-500/40 hover:bg-cyan-950/50" data-attack="REPLAY_ATTACK">
                         Test Spike
                     </button>
                 </div>
@@ -484,18 +500,37 @@
                 <div class="flex justify-between items-center mb-1.5">
                     <div class="flex items-center gap-2">
                         <span class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></span>
-                        <span class="font-display font-bold text-[13px] text-white">Sensor Drift / Anomaly</span>
+                        <span class="font-tech font-bold text-[13px] text-[#10b981] drop-shadow-[0_0_8px_rgba(16,185,129,0.45)]">Sensor Drift / Anomaly</span>
                     </div>
                     <span class="threat-badge-safe">Clear</span>
                 </div>
-                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-2">
+                <p class="text-[11px] text-brand-muted/90 leading-relaxed font-sans mb-1.5">
                     Extended Kalman Filter residual scoring. Unphysical accelerations or IMU-barometer decoupling are flagged as sensor manipulation.
                 </p>
+                <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/50 border border-slate-800/60 text-[9.5px] font-mono mb-2">
+                    <span class="text-brand-muted">EKF IMU-Baro Δ:</span>
+                    <span id="metric-drift" class="text-emerald-400 font-semibold">0.03m // Decoupled: No</span>
+                </div>
                 <div class="flex items-center justify-between pt-1 border-t border-brand-border/40 text-[10px] font-mono text-brand-muted">
-                    <span class="event-counter">0 events logged</span>
-                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-emerald-300 hover:bg-emerald-950/50" data-attack="SENSOR_ANOMALY">
+                    <span class="event-counter font-semibold text-slate-300">0 events logged</span>
+                    <button class="test-threat-btn px-2.5 py-1 rounded-lg text-[9px] glass-btn text-emerald-300 border border-emerald-500/40 hover:bg-emerald-950/50" data-attack="SENSOR_ANOMALY">
                         Test Spike
                     </button>
+                </div>
+            </div>
+
+            <!-- Live Threat Telemetry & Incident Ledger Summary -->
+            <div class="mt-2 p-3 rounded-xl bg-slate-950/70 border border-brand-border/40 text-[10px] font-mono flex flex-col gap-1.5">
+                <div class="flex items-center justify-between text-brand-muted">
+                    <span class="flex items-center gap-1.5 text-cyan-300 font-semibold uppercase">
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                        Forensics Summary
+                    </span>
+                    <span id="matrix-total-reports" class="text-white font-bold">0 Logged</span>
+                </div>
+                <div class="text-[9.5px] text-brand-muted/80 flex items-center justify-between">
+                    <span>Map Retention:</span>
+                    <span class="text-cyan-300 font-semibold">Max 5/type, 10 total</span>
                 </div>
             </div>
 
@@ -510,7 +545,9 @@
 
 </main>
 
+<!-- Sleek Floating Toast Notification Stacker -->
+<div id="toast-container"></div>
+
 <script src="/static/js/app.js"></script>
-<script src="js/app.js"></script>
 </body>
 </html>

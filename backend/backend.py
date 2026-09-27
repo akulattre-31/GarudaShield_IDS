@@ -7,7 +7,7 @@ import os
 import sys
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 import uvicorn
 
 # Import secure transport
@@ -27,6 +27,9 @@ app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
 @app.api_route("/", methods=["GET", "HEAD"])
 async def get_index():
+    index_file = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
     return RedirectResponse(url="/static/index.html")
 
 # ==========================================
@@ -231,6 +234,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     attack_type = payload.get("type", "GPS_SPOOFING")
                     status = f"CRITICAL THREAT INTERCEPTED: {attack_type.upper()}"
                     sim_residual = round(random.uniform(31.0, 42.0), 2)
+                    failsafe = "BRAKE" if ("GPS" in attack_type or "INJECTION" in attack_type or "RATE" in attack_type) else "RTL"
                     sim_payload = {
                         "telemetry": dict(last_known_telemetry),
                         "kinematic_residual": sim_residual,
@@ -241,10 +245,11 @@ async def websocket_endpoint(websocket: WebSocket):
                         "incident_details": {
                             "type": attack_type,
                             "confidence": round(random.uniform(0.94, 0.99), 2),
-                            "source": "Operator Tactical Console"
+                            "source": "Operator Tactical Console",
+                            "failsafe_mode": failsafe
                         }
                     }
-                    print(f"[UI Bridge] Dispatched operator simulated attack: {attack_type}")
+                    print(f"[UI Bridge] Dispatched operator simulated attack: {attack_type} (failsafe={failsafe})")
                     for ws_client in list(active_websockets):
                         asyncio.create_task(ws_client.send_json(sim_payload))
                 elif action == "CLEAR_THREAT":

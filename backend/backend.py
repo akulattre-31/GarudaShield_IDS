@@ -9,6 +9,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 import uvicorn
+import sys
+import threading
+from pymavlink import mavutil
 
 # Import secure transport
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -77,12 +80,113 @@ last_known_telemetry = {
     "latitude": base_lat,
     "longitude": base_lon,
     "vx": 0.0,
-    "vy": 0.0
+    "vy": 0.0,
+    "heading": 0.0
 }
+
+current_threat_status = "NOMINAL"
+current_residual = 1.2
+active_mavlink_ports = set()
+
+async def broadcast_to_websockets(payload: dict):
+    """Safely broadcasts a JSON payload to all connected frontend WebSocket clients."""
+    for ws in list(active_websockets):
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            pass
+
+def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
+    """
+    Dedicated thread listening for ArduPilot SITL / MAVProxy UDP streams.
+    Decodes GLOBAL_POSITION_INT, VFR_HUD, and ATTITUDE to mirror the real simulator drone.
+    """
+    global last_udp_time, current_threat_status, current_residual
+    try:
+        conn = mavutil.mavlink_connection(f"udpin:0.0.0.0:{port}")
+        print(f"[MAVLink Ingress] ✅ Listening for SITL/MAVProxy telemetry on UDP port {port}...")
+        active_mavlink_ports.add(port)
+    except Exception as e:
+        print(f"[MAVLink Ingress] ⚠️ Note: Port {port} unavailable without elevated permissions ({e})")
+        return
+
+    while True:
+        try:
+            msg = conn.recv_match(
+                type=['GLOBAL_POSITION_INT', 'VFR_HUD', 'ATTITUDE', 'HEARTBEAT', 'SYS_STATUS'],
+                blocking=True,
+                timeout=1.0
+            )
+            if not msg:
+                continue
+
+            msg_type = msg.get_type()
+            now = time.time()
+            last_udp_time = now
+
+            if msg_type == 'GLOBAL_POSITION_INT':
+                lat = msg.lat / 1e7
+                lon = msg.lon / 1e7
+                if abs(lat) > 0.001 and abs(lon) > 0.001:
+                    last_known_telemetry["latitude"] = lat
+                    last_known_telemetry["longitude"] = lon
+
+                alt_m = msg.relative_alt / 1000.0 if hasattr(msg, 'relative_alt') else msg.alt / 1000.0
+                last_known_telemetry["altitude_m"] = round(alt_m, 2)
+
+                vx = msg.vx / 100.0
+                vy = msg.vy / 100.0
+                vz = msg.vz / 100.0
+                last_known_telemetry["vx"] = round(vx, 2)
+                last_known_telemetry["vy"] = round(vy, 2)
+                last_known_telemetry["vz"] = round(vz, 2)
+                last_known_telemetry["speed_ms"] = round(math.sqrt(vx**2 + vy**2), 2)
+
+                if hasattr(msg, 'hdg') and msg.hdg != 65535:
+                    last_known_telemetry["heading"] = round(msg.hdg / 100.0, 1)
+
+                ui_payload = {
+                    "telemetry": dict(last_known_telemetry),
+                    "kinematic_residual": current_residual,
+                    "system_status": current_threat_status,
+                    "link_connected": True,
+                    "link_status": f"STREAM_ACTIVE // SITL PORT {port}",
+                    "new_incident": False
+                }
+                asyncio.run_coroutine_threadsafe(broadcast_to_websockets(ui_payload), loop)
+
+            elif msg_type == 'VFR_HUD':
+                if hasattr(msg, 'heading') and msg.heading != 0:
+                    last_known_telemetry["heading"] = msg.heading
+                if hasattr(msg, 'groundspeed'):
+                    last_known_telemetry["speed_ms"] = round(msg.groundspeed, 2)
+                if hasattr(msg, 'alt'):
+                    last_known_telemetry["altitude_m"] = round(msg.alt, 2)
+
+            elif msg_type == 'SYS_STATUS':
+                if hasattr(msg, 'load'):
+                    last_known_telemetry["cpu_load_pct"] = round(msg.load / 10.0, 1)
+        except Exception:
+            pass
+
+def start_mavlink_listeners(loop: asyncio.AbstractEventLoop):
+    candidate_ports = [69, 14550, 14551, 14556]
+    custom_port = os.environ.get("MAVLINK_PORT")
+    if custom_port:
+        try:
+            p = int(custom_port)
+            if p not in candidate_ports:
+                candidate_ports.insert(0, p)
+        except ValueError:
+            pass
+
+    for p in candidate_ports:
+        t = threading.Thread(target=mavlink_listener_worker, args=(p, loop), daemon=True, name=f"mavlink-{p}")
+        t.start()
 
 async def secure_receiver_loop():
     """Polls verified UDP packets from Blue Team / M3 Sensor Engine on port 9000."""
-    global last_udp_time
+    global last_udp_time, current_threat_status, current_residual
     print(f"[UI Bridge] Ingress online: Listening for signed packets on UDP {LISTEN_PORT}...")
     while True:
         try:
@@ -164,96 +268,33 @@ async def link_monitor_loop():
         try:
             now = time.time()
             if now - last_udp_time >= 3.0:
-                # Telemetry connection lost / waiting for Blue Team stream
+                # Telemetry connection lost / waiting for SITL or Blue Team stream
                 last_known_telemetry["speed_ms"] = 0.0
                 last_known_telemetry["vx"] = 0.0
                 last_known_telemetry["vy"] = 0.0
+                global current_threat_status
+                current_threat_status = "NOMINAL"
 
                 heartbeat_payload = {
                     "telemetry": dict(last_known_telemetry),
                     "kinematic_residual": 1.2,
                     "system_status": "LINK_SEVERED",
                     "link_connected": False,
-                    "link_status": "TELEMETRY LINK SEVERED // WAITING FOR BLUE TEAM INGRESS (UDP 9000)",
+                    "link_status": "TELEMETRY LINK SEVERED // WAITING FOR INGRESS (UDP 69 / 14550 / 9000)",
                     "new_incident": False
                 }
 
-                for ws in list(active_websockets):
-                    try:
-                        await ws.send_json(heartbeat_payload)
-                    except Exception:
-                        pass
+                await broadcast_to_websockets(heartbeat_payload)
         except Exception as e:
             print("[UI Bridge] Link monitor error:", e)
 
-async def mavlink_stream_loop(port: int):
-    """
-    Direct MAVLink telemetry ingress from SITL / MAVProxy (e.g. ports 14550, 14551).
-    Synchronizes physical drone motion directly from the simulator in real time.
-    """
-    global last_udp_time
-    try:
-        from pymavlink import mavutil
-        conn = mavutil.mavlink_connection(f"udpin:0.0.0.0:{port}")
-        conn.port.setblocking(False)
-        print(f"[UI Bridge] 🛰️ MAVLink listener online on UDP {port} (ready for SITL/MAVProxy)...", flush=True)
-    except Exception as e:
-        print(f"[UI Bridge] MAVLink listener port {port} note: {e}", flush=True)
-        return
-
-    while True:
-        try:
-            msg = conn.recv_match(
-                type=['GLOBAL_POSITION_INT', 'VFR_HUD', 'ATTITUDE', 'HEARTBEAT'],
-                blocking=False
-            )
-            if msg:
-                mtype = msg.get_type()
-                if mtype == 'GLOBAL_POSITION_INT':
-                    last_known_telemetry['latitude'] = msg.lat / 1e7
-                    last_known_telemetry['longitude'] = msg.lon / 1e7
-                    last_known_telemetry['altitude_m'] = round(msg.relative_alt / 1000.0, 1)
-                    vx = msg.vx / 100.0
-                    vy = msg.vy / 100.0
-                    last_known_telemetry['speed_ms'] = round(math.sqrt(vx**2 + vy**2), 1)
-                    last_known_telemetry['vx'] = round(vx, 2)
-                    last_known_telemetry['vy'] = round(vy, 2)
-                    if hasattr(msg, 'hdg'):
-                        last_known_telemetry['heading'] = round(msg.hdg / 100.0, 1)
-                    last_udp_time = time.time()
-                elif mtype == 'VFR_HUD':
-                    last_known_telemetry['speed_ms'] = round(msg.groundspeed, 1)
-                    last_known_telemetry['altitude_m'] = round(msg.alt, 1)
-                    if hasattr(msg, 'heading'):
-                        last_known_telemetry['heading'] = round(msg.heading, 1)
-                    last_udp_time = time.time()
-                elif mtype == 'HEARTBEAT':
-                    last_udp_time = time.time()
-
-                if mtype in ('GLOBAL_POSITION_INT', 'VFR_HUD'):
-                    telemetry_frame = {
-                        "telemetry": dict(last_known_telemetry),
-                        "kinematic_residual": 1.2,
-                        "system_status": "NOMINAL",
-                        "link_connected": True,
-                        "link_status": "STREAM_ACTIVE",
-                        "new_incident": False
-                    }
-                    for ws in list(active_websockets):
-                        asyncio.create_task(ws.send_json(telemetry_frame))
-                await asyncio.sleep(0.01)
-            else:
-                await asyncio.sleep(0.04)  # ~25Hz poll rate when idle
-        except Exception:
-            await asyncio.sleep(0.05)
+        await asyncio.sleep(0.5)
 
 @app.on_event("startup")
 async def startup_event():
     tasks.append(asyncio.create_task(secure_receiver_loop()))
     tasks.append(asyncio.create_task(link_monitor_loop()))
-    # Listen on standard MAVLink telemetry ports (14550 for GCS, 14551 for team sync)
-    tasks.append(asyncio.create_task(mavlink_stream_loop(14550)))
-    tasks.append(asyncio.create_task(mavlink_stream_loop(14551)))
+    start_mavlink_listeners(asyncio.get_running_loop())
 
 @app.on_event("shutdown")
 async def shutdown_event():

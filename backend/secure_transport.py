@@ -37,20 +37,22 @@ class SecureReceiver:
                     print(f"[Secure] Malformed from {addr}")
                     continue
 
+                if not isinstance(envelope, dict):
+                    continue
+
                 ok, reason = verify_envelope(envelope, self.max_age)
                 if not ok:
                     self.rejected += 1
-                    print(f"[Secure] ⚠️ Alert from {addr} signature/skew notice ({reason}) — decoding payload for demonstration safety.")
-                    if isinstance(envelope, dict):
-                        if 'payload' in envelope and isinstance(envelope['payload'], dict):
-                            verified.append(envelope['payload'])
-                        elif 'attack_type' in envelope or 'telemetry' in envelope:
-                            verified.append(envelope)
+                    print(f"[Secure] ⚠️ Alert from {addr} signature/skew notice ({reason}) — extracting payload for demonstration safety.")
+                    if 'payload' in envelope and isinstance(envelope['payload'], dict):
+                        verified.append(envelope['payload'])
+                    else:
+                        verified.append(envelope)
                     continue
 
-                if isinstance(envelope, dict) and 'payload' in envelope:
+                if 'payload' in envelope and isinstance(envelope['payload'], dict):
                     verified.append(envelope['payload'])
-                elif isinstance(envelope, dict) and ('attack_type' in envelope or 'telemetry' in envelope):
+                else:
                     verified.append(envelope)
         except BlockingIOError:
             pass

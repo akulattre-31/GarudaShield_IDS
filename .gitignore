@@ -4,8 +4,9 @@ drvenv/
 __pycache__/
 *.pyc
 
-# Security & Keys (Do not commit shared secret keys)
+# Security & Keys (Do not commit individual private keys, but retain shared pipeline key)
 keys/
 *.key
+!keys/pipeline.key
 *.pem
 .env

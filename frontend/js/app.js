@@ -122,12 +122,12 @@ function resolveAttackTheme(typeStr) {
     const raw = (typeStr || '').toUpperCase().trim();
     if (raw.includes('SWEEP')) return ATTACK_THEMES.VELOCITY_SWEEP;
     if (raw.includes('SPIKE')) return ATTACK_THEMES.VELOCITY_SPIKE;
-    if (raw.includes('OFFSET') || raw.includes('POSITION') || raw.includes('GPS') || raw.includes('SPOOF')) return ATTACK_THEMES.POSITION_OFFSET;
-    if (raw.includes('YAW') || raw.includes('HEADING')) return ATTACK_THEMES.YAW_COMMAND;
-    if (raw.includes('MODE')) return ATTACK_THEMES.MODE_CHANGE;
-    if (raw.includes('ARM') || raw.includes('DISARM')) return ATTACK_THEMES.ARM_DISARM;
+    if (raw.includes('OFFSET') || raw.includes('POSITION') || raw.includes('GPS') || raw.includes('SPOOF') || raw.includes('ALTITUDE')) return ATTACK_THEMES.POSITION_OFFSET;
+    if (raw.includes('YAW') || raw.includes('HEADING') || raw.includes('DIRECTION')) return ATTACK_THEMES.YAW_COMMAND;
     if (raw.includes('TAKEOFF')) return ATTACK_THEMES.FORCED_TAKEOFF;
     if (raw.includes('LAND')) return ATTACK_THEMES.LAND;
+    if (raw.includes('MODE')) return ATTACK_THEMES.MODE_CHANGE;
+    if (raw.includes('ARM') || raw.includes('DISARM')) return ATTACK_THEMES.ARM_DISARM;
     if (raw.includes('PARAM')) return ATTACK_THEMES.PARAMETER_CHANGE;
     if (raw.includes('SPAM') || raw.includes('FLOOD') || raw.includes('DOS') || raw.includes('RATE')) return ATTACK_THEMES.COMMAND_SPAM;
     

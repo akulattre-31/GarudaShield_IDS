@@ -236,7 +236,8 @@ def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
                     "system_status": current_threat_status,
                     "link_connected": True,
                     "link_status": f"STREAM_ACTIVE // SITL PORT {port}",
-                    "new_incident": False
+                    "new_incident": False,
+                    "incident_details": last_threat_details if time.time() < threat_expiry_time else None
                 }
                 asyncio.run_coroutine_threadsafe(broadcast_to_websockets(ui_payload), loop)
 
@@ -290,8 +291,21 @@ async def secure_receiver_loop():
                     ui_payload["link_status"] = "STREAM_ACTIVE"
                 else:
                     # Translate M3 alert/telemetry packet into unified dashboard structure
-                    attack_type = payload.get('attack_type', '')
-                    confidence = float(payload.get('confidence', 0.0))
+                    attack_type = (
+                        payload.get('attack_type')
+                        or payload.get('attack')
+                        or payload.get('type')
+                        or payload.get('threat')
+                        or payload.get('name')
+                        or payload.get('alert')
+                        or ''
+                    )
+                    confidence = float(
+                        payload.get('confidence')
+                        or payload.get('conf')
+                        or payload.get('score')
+                        or (0.90 if attack_type else 0.0)
+                    )
 
                     if 'lat' in payload or 'latitude' in payload:
                         last_known_telemetry['latitude'] = float(payload.get('lat', payload.get('latitude', last_known_telemetry['latitude'])))
@@ -308,7 +322,8 @@ async def secure_receiver_loop():
                     if 'latency_ms' in payload:
                         last_known_telemetry['latency_ms'] = int(payload.get('latency_ms', 14))
 
-                    is_threat = bool(attack_type and confidence > 0.5)
+                    is_threat = bool(attack_type and confidence >= 0.4)
+                    global last_threat_details
                     if is_threat:
                         current_threat_status = f"CRITICAL THREAT INTERCEPTED: {attack_type.upper()}"
                         res = payload.get('kinematic_residual', None)
@@ -319,10 +334,17 @@ async def secure_receiver_loop():
                         threat_expiry_time = time.time() + 8.0
                         residual = current_residual
                         status = current_threat_status
+                        last_threat_details = {
+                            "type": attack_type,
+                            "confidence": confidence,
+                            "source": payload.get('source', 'Blue Team M3 Sensor Pipeline'),
+                            "failsafe_mode": payload.get('failsafe_mode', 'BRAKE')
+                        }
                     else:
                         if time.time() > threat_expiry_time:
                             current_threat_status = "NOMINAL"
                             current_residual = round(float(payload.get('kinematic_residual', random.uniform(0.8, 2.2))), 2)
+                            last_threat_details = None
                         residual = current_residual
                         status = current_threat_status
 
@@ -333,12 +355,7 @@ async def secure_receiver_loop():
                         "link_connected": True,
                         "link_status": "STREAM_ACTIVE",
                         "new_incident": is_threat,
-                        "incident_details": {
-                            "type": attack_type,
-                            "confidence": confidence,
-                            "source": payload.get('source', 'Blue Team Sensor Pipeline'),
-                            "failsafe_mode": payload.get('failsafe_mode', None)
-                        } if attack_type else None
+                        "incident_details": last_threat_details if is_threat else (last_threat_details if time.time() < threat_expiry_time else None)
                     }
 
                 for ws in list(active_websockets):

@@ -1,17 +1,5 @@
 """
-M3 Runtime Engine — Signed Alerts + Adaptive Thresholds + Command Monitor
-=========================================================================
-Detection Layers:
-  L1  Rate Limiter         (DoS flood)
-  L2  Sequence Validator   (injection, replay)
-  L3  EKF Physics          (GPS spoofing via NIS)
-  L4  Statistical Rules    (known attacks, data-derived thresholds)
-  L5  Isolation Forest     (unknown / zero-day)
-  L6  Adaptive Thresholds  (online recalibration)
-  L7  Command Monitor      (arm/mode/param/yaw events)
-  L8  HMAC-SHA256 Security (signed alerts + verified notifications)
-
-Detects all 10 M4 attack types via 8 independent layers.
+M3 Runtime Engine — live IDS
 """
 
 import os
@@ -39,37 +27,51 @@ from secure_transport import SecureSender, SecureReceiver
 # =====================================================
 # CONFIG
 # =====================================================
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-MAVLINK_URL = 'udp:0.0.0.0:14551'
-ALERT_TO_M5_HOST ='100.85.18.10'          # ← M5's Tailscale IP if remote
-ALERT_TO_M5_PORT = 9000
+MAVLINK_URL        = 'udp:0.0.0.0:14551'
+ALERT_TO_M5_HOST   = '100.85.18.10'
+ALERT_TO_M5_PORT   = 9000
 ATTACK_NOTIFY_PORT = 9001
-LATENCY_LOG_PATH = os.path.join(PROJECT_ROOT, 'logs', 'latency_log.json')
+LATENCY_LOG_PATH       = os.path.join(PROJECT_ROOT, 'logs', 'latency_log.json')
 UNKNOWN_ANOMALIES_PATH = os.path.join(PROJECT_ROOT, 'data', 'unknown_anomalies.pkl')
 
+METERS_PER_DEG_LAT = 111320.0
+
+
+def latlon_delta_to_meters(lat_delta_deg, lon_delta_deg, ref_lat_deg):
+    """
+    Convert a (lat, lon) delta in DEGREES to an approximate planar
+    displacement in METERS. See normal_features.py for why this is
+    needed: motion_consistency compares GPS displacement against a
+    velocity-integrated (meters) displacement, and comparing raw
+    degree-scale gps_jump against meters made the ratio ~1e-5 for any
+    moving window — normal or attacked — so GPS_FREEZE_ATTACK could
+    not actually discriminate a frozen GPS from healthy flight.
+    """
+    meters_per_deg_lon = METERS_PER_DEG_LAT * np.cos(np.radians(ref_lat_deg))
+    dy = lat_delta_deg * METERS_PER_DEG_LAT
+    dx = lon_delta_deg * meters_per_deg_lon
+    return float(np.sqrt(dx ** 2 + dy ** 2))
+
+
 WINDOW_SEC = 1.0
-STEP_SEC = 0.5
-ALERT_COOLDOWN_SEC = 3.0
+STEP_SEC   = 0.5
 EXPECTED_MSG_INTERVAL_MS = 250
 
-# Don't evaluate rule/ML alerts during the first few seconds after connecting
-# — EKF and motion-consistency stats haven't stabilized yet, so cold-start
-# transients (e.g. a one-off GPS_FREEZE_ATTACK right at boot) get skipped.
-STARTUP_GRACE_SEC = 5.0
-
-# Require the SAME attack_type to appear in this many consecutive detection
-# windows before it's treated as confirmed and actually dispatched. Filters
-# out single noisy windows; a real sustained attack will still hit this
-# easily since it keeps recurring.
-CONFIRM_WINDOWS = 3
+ALERT_COOLDOWN_SEC      = 10.0
+CLEAR_GRACE_SEC         = 6.0
+STARTUP_GRACE_SEC       = 5.0
+CONFIRM_WINDOWS         = 3
+EKF_CONSECUTIVE_SPOOF   = 3
+FAILSAFE_DISPATCH_COOLDOWN_SEC = 15.0
 
 # =====================================================
 # STARTUP
 # =====================================================
 print("[M3] " + "=" * 55)
-print("[M3] Drone IDS Runtime Engine — Secure + Adaptive + CmdMonitor")
+print("[M3] Drone IDS Runtime Engine — live")
 print("[M3] " + "=" * 55)
 
 try:
@@ -82,29 +84,29 @@ except Exception as e:
     sys.exit(1)
 
 print("[M3] Initializing engines...")
-ekf = DroneEKF(dt=0.1)
-rate_limiter = RateLimiter(max_hz=1000, window_sec=1.0)
+ekf           = DroneEKF(dt=0.1)
+rate_limiter  = RateLimiter(max_hz=1000, window_sec=1.0)
 seq_validator = SequenceValidator(expected_sysid=1)
-ledger = IncidentLedger()
-adaptive = AdaptiveThresholds(window_size=500, update_every=100)
-cmd_monitor = CommandMonitor(window_sec=WINDOW_SEC, expected_sysid=1,
-                              arm_grace=1, mode_grace=2)
+ledger        = IncidentLedger()
+adaptive      = AdaptiveThresholds(window_size=500, update_every=100)
+cmd_monitor   = CommandMonitor(window_sec=WINDOW_SEC, expected_sysid=1,
+                                arm_grace=1, mode_grace=2)
 print("[M3] EKF, RateLimiter, SequenceValidator, Ledger, Adaptive, CmdMonitor ready")
 
-# Secure transport
-secure_sender = SecureSender(ALERT_TO_M5_HOST, ALERT_TO_M5_PORT)
+secure_sender   = SecureSender(ALERT_TO_M5_HOST, ALERT_TO_M5_PORT)
 notify_receiver = SecureReceiver('0.0.0.0', ATTACK_NOTIFY_PORT, max_age_sec=30)
 print("[M3] Signed alerts → M5, signed notifications ← M4")
 
-# State
-last_alert_time = 0
-last_failsafe_dispatch = {}   # attack_type -> last time we actually sent a mode command
-FAILSAFE_DISPATCH_COOLDOWN_SEC = 15.0   # don't re-send the same mode command more often than this
-consecutive_alert_counts = {}   # attack_type -> # of consecutive windows it's been seen in
-buffer = deque(maxlen=500)
+last_alert_time_by_type = {}
+last_seen_by_type       = {}
+last_failsafe_dispatch  = {}
+consecutive_alert_counts = {}
+buffer            = deque(maxlen=500)
 unknown_anomalies = []
-attack_markers = {}
-latency_records = []
+attack_markers    = {}
+latency_records   = []
+ekf_consecutive_spoof = 0
+last_ekf_nis = 0.0
 running = True
 
 
@@ -145,11 +147,18 @@ def save_latency_records():
 
 
 def check_attack_notifications():
-    """Read + verify M4's signed attack notifications."""
     for payload in notify_receiver.poll():
         atype = payload.get('type', 'UNKNOWN')
         attack_markers[atype] = time.time()
         print(f"[M3] 🔔 Verified M4 notification: {atype}")
+
+
+def expire_cleared_alerts():
+    now = time.time()
+    for atype in list(last_seen_by_type.keys()):
+        if now - last_seen_by_type[atype] > CLEAR_GRACE_SEC:
+            last_seen_by_type.pop(atype, None)
+            last_alert_time_by_type.pop(atype, None)
 
 
 def compute_latency(attack_type):
@@ -160,10 +169,12 @@ def compute_latency(attack_type):
 
 
 def emit_alert(master, attack_type, confidence, source, features=None):
-    global last_alert_time
-    if time.time() - last_alert_time < ALERT_COOLDOWN_SEC:
+    now_ts = time.time()
+
+    last_alert = last_alert_time_by_type.get(attack_type, 0)
+    if now_ts - last_alert < ALERT_COOLDOWN_SEC:
         return
-    last_alert_time = time.time()
+    last_alert_time_by_type[attack_type] = now_ts
 
     ledger.log(attack_type, confidence, source, features)
 
@@ -186,16 +197,7 @@ def emit_alert(master, attack_type, confidence, source, features=None):
         if len(unknown_anomalies) % 5 == 0:
             save_unknown_anomalies()
 
-    # Dispatch failsafe to the drone FIRST, so the dashboard alert can
-    # report which action was actually taken alongside the detection.
-    # Only actually re-send the mode command if we haven't dispatched
-    # this same attack_type recently — otherwise a persistent condition
-    # spams the drone with the identical MAV_CMD_DO_SET_MODE every
-    # ALERT_COOLDOWN_SEC, which is noisy and pointless once it's already
-    # in that mode.
-    global last_failsafe_dispatch
     failsafe_result = False
-    now_ts = time.time()
     last_dispatch_for_type = last_failsafe_dispatch.get(attack_type, 0)
     if now_ts - last_dispatch_for_type >= FAILSAFE_DISPATCH_COOLDOWN_SEC:
         try:
@@ -219,9 +221,8 @@ def emit_alert(master, attack_type, confidence, source, features=None):
         'confidence': round(confidence, 3),
         'source': source,
         'latency_ms': latency_ms,
-        'failsafe_mode': failsafe_mode,   # BRAKE / LAND / RTL / None
+        'failsafe_mode': failsafe_mode,
     }
-
     try:
         secure_sender.send(alert)
     except Exception as e:
@@ -232,14 +233,13 @@ def emit_alert(master, attack_type, confidence, source, features=None):
 
 
 def detect_flight_phase(vx_series, vy_series, vz_series, alt_series):
-    """Classify flight phase using data-derived thresholds."""
-    speed = np.sqrt(vx_series ** 2 + vy_series ** 2 + vz_series ** 2).mean()
+    speed   = np.sqrt(vx_series ** 2 + vy_series ** 2 + vz_series ** 2).mean()
     vz_mean = vz_series.mean()
 
-    hover_max = adaptive.get('hover_speed_max') or 0.85
-    takeoff_min = adaptive.get('takeoff_vz_min') or 0.88
-    landing_max = adaptive.get('landing_vz_max') or -0.75
-    cruise_min = adaptive.get('cruise_speed_min') or 5.21
+    hover_max   = adaptive.get('hover_speed_max')  or 0.85
+    takeoff_min = adaptive.get('takeoff_vz_min')   or 0.88
+    landing_max = adaptive.get('landing_vz_max')   or -0.75
+    cruise_min  = adaptive.get('cruise_speed_min') or 5.21
 
     if speed < hover_max:
         return 'hover'
@@ -253,10 +253,6 @@ def detect_flight_phase(vx_series, vy_series, vz_series, alt_series):
 
 
 def extract_from_window(messages):
-    """
-    Extract 26 telemetry features + 7 command-level features
-    (merged from CommandMonitor).
-    """
     if len(messages) < 5:
         return None
 
@@ -275,21 +271,21 @@ def extract_from_window(messages):
     if len(lats) < 3:
         return None
 
-    lat = pd.Series(lats)
-    lon = pd.Series(lons)
-    alt = pd.Series(alts)
-    vx = pd.Series(vxs)
-    vy = pd.Series(vys)
-    vz = pd.Series(vzs)
-    t = pd.Series(times)
+    lat = pd.Series(lats); lon = pd.Series(lons); alt = pd.Series(alts)
+    vx  = pd.Series(vxs);  vy  = pd.Series(vys);  vz  = pd.Series(vzs)
+    t   = pd.Series(times)
 
     phase = detect_flight_phase(vx, vy, vz, alt)
-    feat = {'_phase': phase}
+    feat  = {'_phase': phase}
 
     # ---------- Navigation ----------
     lat_delta = abs(lat.iloc[-1] - lat.iloc[0])
     lon_delta = abs(lon.iloc[-1] - lon.iloc[0])
     feat['gps_jump'] = np.sqrt(lat_delta ** 2 + lon_delta ** 2)
+    # Meters-scale version, used only for motion_consistency below.
+    # gps_jump (degrees) stays untouched — GPS_SPOOFING thresholds are
+    # calibrated against that degree-scale value.
+    feat['gps_jump_m'] = latlon_delta_to_meters(lat_delta, lon_delta, lat.iloc[0])
     feat['gps_cumulative_drift'] = lat.diff().abs().sum() + lon.diff().abs().sum()
     feat['altitude_drift'] = abs(alt.iloc[-1] - alt.iloc[0])
     feat['altitude_variance'] = alt.var()
@@ -300,12 +296,12 @@ def extract_from_window(messages):
 
     # ---------- Control ----------
     speed_3d = np.sqrt(vx ** 2 + vy ** 2 + vz ** 2)
-    feat['velocity_magnitude'] = speed_3d.mean()
-    feat['velocity_variance'] = vz.var()
-    feat['horizontal_speed'] = np.sqrt(vx ** 2 + vy ** 2).mean()
+    feat['velocity_magnitude']  = speed_3d.mean()
+    feat['velocity_variance']   = vz.var()
+    feat['horizontal_speed']    = np.sqrt(vx ** 2 + vy ** 2).mean()
     feat['vertical_speed_mean'] = vz.mean()
-    feat['vz_jump'] = abs(vz.iloc[-1] - vz.iloc[0])
-    feat['max_velocity_jump'] = vz.diff().abs().max()
+    feat['vz_jump']             = abs(vz.iloc[-1] - vz.iloc[0])
+    feat['max_velocity_jump']   = vz.diff().abs().max()
 
     # ---------- Velocity spike ----------
     feat['vx_jump'] = abs(vx.iloc[-1] - vx.iloc[0])
@@ -321,9 +317,7 @@ def extract_from_window(messages):
     )
 
     # ---------- Oscillation ----------
-    dvx = vx.diff().dropna()
-    dvy = vy.diff().dropna()
-    dvz = vz.diff().dropna()
+    dvx = vx.diff().dropna(); dvy = vy.diff().dropna(); dvz = vz.diff().dropna()
     feat['velocity_oscillation'] = float(
         np.sqrt((dvx ** 2).mean() + (dvy ** 2).mean() + (dvz ** 2).mean())
     )
@@ -335,19 +329,23 @@ def extract_from_window(messages):
     feat['direction_change_rate'] = sign_flips / 10.0
 
     # ---------- Heading (guarded) ----------
-    moving_min = adaptive.get('moving_speed_min') or 0.5
+    moving_min  = adaptive.get('moving_speed_min') or 0.5
     speed_horiz = np.sqrt(vx ** 2 + vy ** 2)
-    if speed_horiz.mean() > moving_min:
+    if (speed_horiz.mean() > moving_min
+            and speed_horiz.iloc[-1] > moving_min
+            and speed_horiz.iloc[0] > moving_min):
         heading = np.arctan2(vy, vx + 1e-6)
-        feat['heading_change'] = abs(heading.iloc[-1] - heading.iloc[0])
+        dh = heading.iloc[-1] - heading.iloc[0]
+        dh = (dh + np.pi) % (2 * np.pi) - np.pi
+        feat['heading_change'] = abs(dh)
     else:
         feat['heading_change'] = 0.0
 
     # ---------- Communication ----------
     time_diffs = t.diff().dropna()
-    feat['timestamp_variance'] = time_diffs.var() if len(time_diffs) > 1 else 0
+    feat['timestamp_variance']      = time_diffs.var() if len(time_diffs) > 1 else 0
     feat['timestamp_mean_interval'] = time_diffs.mean() if len(time_diffs) > 0 else 0
-    feat['timestamp_max_gap'] = time_diffs.max() if len(time_diffs) > 0 else 0
+    feat['timestamp_max_gap']       = time_diffs.max() if len(time_diffs) > 0 else 0
     if len(time_diffs) > 0:
         gaps_above = (time_diffs > EXPECTED_MSG_INTERVAL_MS * 1.5).sum()
         feat['packet_loss_rate'] = gaps_above / len(time_diffs)
@@ -356,15 +354,27 @@ def extract_from_window(messages):
 
     # ---------- Cross-consistency ----------
     feat['gps_velocity_mismatch'] = feat['gps_jump'] / (feat['velocity_magnitude'] + 1e-6)
-    feat['position_stability'] = feat['gps_jump'] / (feat['velocity_magnitude'] + 1e-6)
-    feat['altitude_velocity_mismatch'] = feat['altitude_drift'] / (abs(feat['vertical_speed_mean']) + 1e-6)
+    feat['position_stability']    = feat['gps_jump'] / (feat['velocity_magnitude'] + 1e-6)
+
+    # --- FIX ---
+    # Match normal_features.py: only compute the ratio when the drone is
+    # actually climbing/descending. Otherwise hover windows poison the
+    # feature with ~1e3 values, blowing through the derived threshold.
+    vz_abs = abs(feat['vertical_speed_mean'])
+    if vz_abs > 0.3:
+        feat['altitude_velocity_mismatch'] = feat['altitude_drift'] / vz_abs
+    else:
+        feat['altitude_velocity_mismatch'] = 0.0
 
     # ---------- Motion consistency (hover-aware) ----------
+    # FIX: use the meters-scale gps_jump_m against the meters-scale
+    # expected_displacement (previously degrees vs. meters — see
+    # latlon_delta_to_meters docstring above).
     window_sec = (t.iloc[-1] - t.iloc[0]) / 1000.0 + 1e-6
     vel_mag = feat['velocity_magnitude']
     if vel_mag > 1.0:
         expected_displacement = vel_mag * window_sec
-        feat['motion_consistency'] = feat['gps_jump'] / (expected_displacement + 1e-6)
+        feat['motion_consistency'] = feat['gps_jump_m'] / (expected_displacement + 1e-6)
     else:
         feat['motion_consistency'] = 1.0
 
@@ -378,13 +388,14 @@ def extract_from_window(messages):
 # MAIN LOOP
 # =====================================================
 def main():
-    global running
+    global running, ekf_consecutive_spoof, last_ekf_nis
 
     print(f"[M3] Connecting to MAVLink at {MAVLINK_URL}...")
     try:
         master = mavutil.mavlink_connection(MAVLINK_URL)
         master.wait_heartbeat(timeout=30)
-        print(f"[M3] ✅ Connected (sysid={master.target_system}, compid={master.target_component})")
+        print(f"[M3] ✅ Connected (sysid={master.target_system}, "
+              f"compid={master.target_component})")
     except Exception as e:
         print(f"[M3] ❌ Connection failed: {e}")
         sys.exit(1)
@@ -400,6 +411,7 @@ def main():
     while running:
         try:
             check_attack_notifications()
+            expire_cleared_alerts()
 
             msg = master.recv_match(blocking=True, timeout=0.1)
             if msg is None:
@@ -408,34 +420,39 @@ def main():
             msg_count += 1
             msg_type = msg.get_type()
 
-            # L7: Command Monitor observes every message
             cmd_monitor.observe(msg)
 
-            # L1: Rate limiter
+            # L1
             exceeded, rate = rate_limiter.check()
             if exceeded:
                 emit_alert(master, 'DOS_FLOOD_ALERT', 0.95, 'rate_limiter',
                            {'rate_hz': rate})
 
-            # L2: Sequence validator
-            sysid = msg.get_srcSystem() if hasattr(msg, 'get_srcSystem') else 1
+            # L2
+            sysid  = msg.get_srcSystem()    if hasattr(msg, 'get_srcSystem')    else 1
             compid = msg.get_srcComponent() if hasattr(msg, 'get_srcComponent') else 1
-            msgid = msg.get_msgId() if hasattr(msg, 'get_msgId') else 0
-            seq = getattr(msg, 'seq', 0)
+            msgid  = msg.get_msgId()        if hasattr(msg, 'get_msgId')        else 0
+            seq    = getattr(msg, 'seq', 0)
             for a in seq_validator.check(sysid, compid, msgid, seq):
                 emit_alert(master, a, 0.90, 'seq_validator')
 
-            # L3: EKF
+            # L3
             if msg_type == 'RAW_IMU':
                 ekf.predict()
             elif msg_type == 'GLOBAL_POSITION_INT':
                 gps = (msg.lat / 1e7, msg.lon / 1e7, msg.alt / 1000.0)
                 nis = ekf.update_gps(gps)
+                last_ekf_nis = nis
                 if ekf.is_spoofed(nis):
-                    emit_alert(master, 'GPS_SPOOFING_ALERT', 0.95, 'ekf',
-                               {'nis': float(nis)})
+                    ekf_consecutive_spoof += 1
+                    if ekf_consecutive_spoof >= EKF_CONSECUTIVE_SPOOF:
+                        emit_alert(master, 'GPS_SPOOFING_ALERT', 0.95, 'ekf',
+                                   {'nis': float(nis),
+                                    'consecutive': ekf_consecutive_spoof})
+                        ekf_consecutive_spoof = 0
+                else:
+                    ekf_consecutive_spoof = 0
 
-            # Buffer
             buffer.append((time.time(), msg))
             while buffer and time.time() - buffer[0][0] > WINDOW_SEC * 2:
                 buffer.popleft()
@@ -449,33 +466,32 @@ def main():
                     phase = features.pop('_phase', 'unknown')
                     in_startup_grace = (time.time() - engine_start_time) < STARTUP_GRACE_SEC
 
-                    # ML prediction
                     feat_vector = [features.get(f, 0) for f in feature_names]
                     X = pd.DataFrame([feat_vector], columns=feature_names)
-                    X_scaled = scaler.transform(X)
-                    ml_pred = model.predict(X_scaled)[0]
-                    ml_score = model.decision_function(X_scaled)[0]
+                    X_scaled  = scaler.transform(X)
+                    ml_pred   = model.predict(X_scaled)[0]
+                    ml_score  = model.decision_function(X_scaled)[0]
 
-                    # Rule detection
                     rule_alerts = apply_rules(features)
-                    is_attack = bool(rule_alerts) or (ml_pred == -1)
+                    is_attack   = bool(rule_alerts) or (ml_pred == -1)
 
                     if in_startup_grace:
-                        # Still let EKF/adaptive baselines settle; don't
-                        # alert on cold-start transients.
                         if msg_count % 40 == 0:
                             print(f"[M3] ⏳ Startup grace ({phase}) msgs={msg_count}")
                     else:
                         detected_types = {a[0] for a in rule_alerts}
-                        # Decay counters for any type not seen this window,
-                        # so confirmation requires truly consecutive hits.
+                        now_seen = time.time()
+                        for atype in detected_types:
+                            last_seen_by_type[atype] = now_seen
+
                         for t in list(consecutive_alert_counts.keys()):
                             if t not in detected_types:
                                 consecutive_alert_counts[t] = 0
 
                         confirmed = []
                         for atype, conf in rule_alerts:
-                            consecutive_alert_counts[atype] = consecutive_alert_counts.get(atype, 0) + 1
+                            consecutive_alert_counts[atype] = \
+                                consecutive_alert_counts.get(atype, 0) + 1
                             if consecutive_alert_counts[atype] >= CONFIRM_WINDOWS:
                                 confirmed.append((atype, conf))
 
@@ -483,18 +499,23 @@ def main():
                             best = max(confirmed, key=lambda x: x[1])
                             emit_alert(master, best[0], best[1], 'rule', features)
                         elif rule_alerts:
-                            # Seen, but not yet confirmed across enough windows
-                            pending = ', '.join(f"{a}({consecutive_alert_counts[a]}/{CONFIRM_WINDOWS})"
-                                                 for a, _ in rule_alerts)
+                            pending = ', '.join(
+                                f"{a}({consecutive_alert_counts[a]}/{CONFIRM_WINDOWS})"
+                                for a, _ in rule_alerts
+                            )
                             print(f"[M3] 🕒 Pending confirmation: {pending}")
                         elif ml_pred == -1:
                             conf = min(1.0, max(0.0, (0.1 - ml_score) / 0.2))
-                            emit_alert(master, 'UNKNOWN_ANOMALY', conf, 'ml', features)
+                            if conf >= 0.75:
+                                emit_alert(master, 'UNKNOWN_ANOMALY', conf, 'ml', features)
+                            elif msg_count % 40 == 0:
+                                print(f"[M3] ℹ️  ML flag (below gate) "
+                                      f"score={ml_score:.3f} conf={conf:.2f}")
                         else:
                             if msg_count % 40 == 0:
-                                print(f"[M3] ✅ Normal ({phase}) score={ml_score:.3f} msgs={msg_count}")
+                                print(f"[M3] ✅ Normal ({phase}) score={ml_score:.3f} "
+                                      f"msgs={msg_count} ekf_nis={last_ekf_nis:.2f}")
 
-                    # Feed adaptive engine
                     adaptive.add_sample(
                         speed_3d=features.get('velocity_magnitude', 0),
                         vz=features.get('vertical_speed_mean', 0),

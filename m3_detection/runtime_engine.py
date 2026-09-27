@@ -1,20 +1,17 @@
 """
-M3 Runtime Engine — Signed Alerts + Adaptive Thresholds
-=========================================================
+M3 Runtime Engine — Signed Alerts + Adaptive Thresholds + Command Monitor
+=========================================================================
 Detection Layers:
-  L0: Source tracking (informational)
-  L1: Rate limiter (DoS flood)
-  L2: Sequence/sysid validator (injection)
-  L3: EKF physics (GPS spoofing)
-  L4: Rule-based (statistical thresholds)
-  L5: Isolation Forest (unknown anomaly)
-  L6: Adaptive thresholds (online recalibration)
+  L1  Rate Limiter         (DoS flood)
+  L2  Sequence Validator   (injection, replay)
+  L3  EKF Physics          (GPS spoofing via NIS)
+  L4  Statistical Rules    (known attacks, data-derived thresholds)
+  L5  Isolation Forest     (unknown / zero-day)
+  L6  Adaptive Thresholds  (online recalibration)
+  L7  Command Monitor      (arm/mode/param/yaw events)
+  L8  HMAC-SHA256 Security (signed alerts + verified notifications)
 
-Security:
-  - HMAC-SHA256 signed alerts (M3 → M5)
-  - HMAC-SHA256 verified notifications (M4 → M3)
-  - Replay protection via timestamp
-  - Encrypted tamper-evident ledger
+Detects all 10 M4 attack types via 8 independent layers.
 """
 
 import os
@@ -36,6 +33,7 @@ from cyber_engine import RateLimiter, SequenceValidator
 from mitigation import dispatch_failsafe
 from forensics import IncidentLedger
 from adaptive_thresholds import AdaptiveThresholds
+from command_monitor import CommandMonitor
 from secure_transport import SecureSender, SecureReceiver
 
 # =====================================================
@@ -45,7 +43,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 MAVLINK_URL = 'udp:0.0.0.0:14551'
-ALERT_TO_M5_HOST = '127.0.0.1'          # ← M5's IP if different
+ALERT_TO_M5_HOST ='100.85.18.10'          # ← M5's Tailscale IP if remote
 ALERT_TO_M5_PORT = 9000
 ATTACK_NOTIFY_PORT = 9001
 LATENCY_LOG_PATH = os.path.join(PROJECT_ROOT, 'logs', 'latency_log.json')
@@ -60,7 +58,7 @@ EXPECTED_MSG_INTERVAL_MS = 250
 # STARTUP
 # =====================================================
 print("[M3] " + "=" * 55)
-print("[M3] Drone IDS Runtime Engine — Secure + Adaptive")
+print("[M3] Drone IDS Runtime Engine — Secure + Adaptive + CmdMonitor")
 print("[M3] " + "=" * 55)
 
 try:
@@ -78,7 +76,8 @@ rate_limiter = RateLimiter(max_hz=1000, window_sec=1.0)
 seq_validator = SequenceValidator(expected_sysid=1)
 ledger = IncidentLedger()
 adaptive = AdaptiveThresholds(window_size=500, update_every=100)
-print("[M3] EKF, RateLimiter, SequenceValidator, Ledger, Adaptive ready")
+cmd_monitor = CommandMonitor(window_sec=WINDOW_SEC, expected_sysid=1)
+print("[M3] EKF, RateLimiter, SequenceValidator, Ledger, Adaptive, CmdMonitor ready")
 
 # Secure transport
 secure_sender = SecureSender(ALERT_TO_M5_HOST, ALERT_TO_M5_PORT)
@@ -98,6 +97,7 @@ def handle_shutdown(signum, frame):
     global running
     print("\n[M3] Shutdown signal")
     running = False
+
 
 signal.signal(signal.SIGINT, handle_shutdown)
 signal.signal(signal.SIGTERM, handle_shutdown)
@@ -130,7 +130,7 @@ def save_latency_records():
 
 
 def check_attack_notifications():
-    """Read + VERIFY M4's signed attack notifications."""
+    """Read + verify M4's signed attack notifications."""
     for payload in notify_receiver.poll():
         atype = payload.get('type', 'UNKNOWN')
         attack_markers[atype] = time.time()
@@ -180,7 +180,6 @@ def emit_alert(master, attack_type, confidence, source, features=None):
         'latency_ms': latency_ms,
     }
 
-    # SIGNED send to M5
     try:
         secure_sender.send(alert)
     except Exception as e:
@@ -189,7 +188,7 @@ def emit_alert(master, attack_type, confidence, source, features=None):
     print(f"[M3] 🚨 {attack_type} (conf={confidence:.2f}, src={source})")
 
     try:
-        dispatch_failsafe(master, attack_type, confidence)
+        dispatch_failsafe(master, attack_type, confidence, source=source)
     except Exception as e:
         print(f"[M3] Failsafe error: {e}")
 
@@ -216,7 +215,10 @@ def detect_flight_phase(vx_series, vy_series, vz_series, alt_series):
 
 
 def extract_from_window(messages):
-    """Extract features with phase awareness + motion consistency."""
+    """
+    Extract 26 telemetry features + 7 command-level features
+    (merged from CommandMonitor).
+    """
     if len(messages) < 5:
         return None
 
@@ -246,7 +248,7 @@ def extract_from_window(messages):
     phase = detect_flight_phase(vx, vy, vz, alt)
     feat = {'_phase': phase}
 
-    # Navigation
+    # ---------- Navigation ----------
     lat_delta = abs(lat.iloc[-1] - lat.iloc[0])
     lon_delta = abs(lon.iloc[-1] - lon.iloc[0])
     feat['gps_jump'] = np.sqrt(lat_delta ** 2 + lon_delta ** 2)
@@ -258,7 +260,7 @@ def extract_from_window(messages):
     dt = t.iloc[-1] - t.iloc[0] + 1e-6
     feat['gps_change_rate'] = feat['gps_jump'] / dt
 
-    # Control
+    # ---------- Control ----------
     speed_3d = np.sqrt(vx ** 2 + vy ** 2 + vz ** 2)
     feat['velocity_magnitude'] = speed_3d.mean()
     feat['velocity_variance'] = vz.var()
@@ -267,6 +269,34 @@ def extract_from_window(messages):
     feat['vz_jump'] = abs(vz.iloc[-1] - vz.iloc[0])
     feat['max_velocity_jump'] = vz.diff().abs().max()
 
+    # ---------- Velocity spike ----------
+    feat['vx_jump'] = abs(vx.iloc[-1] - vx.iloc[0])
+    feat['vy_jump'] = abs(vy.iloc[-1] - vy.iloc[0])
+    feat['max_horizontal_velocity_jump'] = max(
+        vx.diff().abs().max(),
+        vy.diff().abs().max()
+    )
+    feat['velocity_vector_jump'] = np.sqrt(
+        (vx.iloc[-1] - vx.iloc[0]) ** 2 +
+        (vy.iloc[-1] - vy.iloc[0]) ** 2 +
+        (vz.iloc[-1] - vz.iloc[0]) ** 2
+    )
+
+    # ---------- Oscillation ----------
+    dvx = vx.diff().dropna()
+    dvy = vy.diff().dropna()
+    dvz = vz.diff().dropna()
+    feat['velocity_oscillation'] = float(
+        np.sqrt((dvx ** 2).mean() + (dvy ** 2).mean() + (dvz ** 2).mean())
+    )
+
+    sign_flips = 0
+    for series in (vx, vy):
+        signs = np.sign(series.values)
+        sign_flips += int(np.sum(signs[1:] * signs[:-1] < 0))
+    feat['direction_change_rate'] = sign_flips / 10.0
+
+    # ---------- Heading (guarded) ----------
     moving_min = adaptive.get('moving_speed_min') or 0.5
     speed_horiz = np.sqrt(vx ** 2 + vy ** 2)
     if speed_horiz.mean() > moving_min:
@@ -275,26 +305,33 @@ def extract_from_window(messages):
     else:
         feat['heading_change'] = 0.0
 
-    # Communication
+    # ---------- Communication ----------
     time_diffs = t.diff().dropna()
     feat['timestamp_variance'] = time_diffs.var() if len(time_diffs) > 1 else 0
     feat['timestamp_mean_interval'] = time_diffs.mean() if len(time_diffs) > 0 else 0
     feat['timestamp_max_gap'] = time_diffs.max() if len(time_diffs) > 0 else 0
     if len(time_diffs) > 0:
-        feat['packet_loss_rate'] = max(0,
-            (time_diffs.max() - EXPECTED_MSG_INTERVAL_MS) / EXPECTED_MSG_INTERVAL_MS)
+        gaps_above = (time_diffs > EXPECTED_MSG_INTERVAL_MS * 1.5).sum()
+        feat['packet_loss_rate'] = gaps_above / len(time_diffs)
     else:
         feat['packet_loss_rate'] = 0
 
-    # Cross-consistency
+    # ---------- Cross-consistency ----------
     feat['gps_velocity_mismatch'] = feat['gps_jump'] / (feat['velocity_magnitude'] + 1e-6)
     feat['position_stability'] = feat['gps_jump'] / (feat['velocity_magnitude'] + 1e-6)
     feat['altitude_velocity_mismatch'] = feat['altitude_drift'] / (abs(feat['vertical_speed_mean']) + 1e-6)
 
-    # Motion consistency (GPS freeze)
+    # ---------- Motion consistency (hover-aware) ----------
     window_sec = (t.iloc[-1] - t.iloc[0]) / 1000.0 + 1e-6
-    expected_displacement = feat['velocity_magnitude'] * window_sec
-    feat['motion_consistency'] = feat['gps_jump'] / (expected_displacement + 1e-6)
+    vel_mag = feat['velocity_magnitude']
+    if vel_mag > 1.0:
+        expected_displacement = vel_mag * window_sec
+        feat['motion_consistency'] = feat['gps_jump'] / (expected_displacement + 1e-6)
+    else:
+        feat['motion_consistency'] = 1.0
+
+    # ---------- Merge command-level features ----------
+    feat.update(cmd_monitor.snapshot())
 
     return feat
 
@@ -332,6 +369,9 @@ def main():
             msg_count += 1
             msg_type = msg.get_type()
 
+            # L7: Command Monitor observes every message
+            cmd_monitor.observe(msg)
+
             # L1: Rate limiter
             exceeded, rate = rate_limiter.check()
             if exceeded:
@@ -356,6 +396,7 @@ def main():
                     emit_alert(master, 'GPS_SPOOFING_ALERT', 0.95, 'ekf',
                                {'nis': float(nis)})
 
+            # Buffer
             buffer.append((time.time(), msg))
             while buffer and time.time() - buffer[0][0] > WINDOW_SEC * 2:
                 buffer.popleft()
@@ -368,12 +409,14 @@ def main():
                 if features:
                     phase = features.pop('_phase', 'unknown')
 
+                    # ML prediction
                     feat_vector = [features.get(f, 0) for f in feature_names]
                     X = pd.DataFrame([feat_vector], columns=feature_names)
                     X_scaled = scaler.transform(X)
                     ml_pred = model.predict(X_scaled)[0]
                     ml_score = model.decision_function(X_scaled)[0]
 
+                    # Rule detection
                     rule_alerts = apply_rules(features)
                     is_attack = bool(rule_alerts) or (ml_pred == -1)
 
@@ -387,7 +430,7 @@ def main():
                         if msg_count % 40 == 0:
                             print(f"[M3] ✅ Normal ({phase}) score={ml_score:.3f} msgs={msg_count}")
 
-                    # Feed adaptive engine (uses only clean windows)
+                    # Feed adaptive engine
                     adaptive.add_sample(
                         speed_3d=features.get('velocity_magnitude', 0),
                         vz=features.get('vertical_speed_mean', 0),

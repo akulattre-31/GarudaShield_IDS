@@ -27,9 +27,20 @@ TRACKED = [
     'altitude_drift',
     'altitude_velocity_mismatch',
     'motion_consistency',       # ← ADDED
+    'vx_jump',                        # ← NEW
+    'vy_jump',                        # ← NEW
+    'max_horizontal_velocity_jump',   # ← NEW
+    'velocity_vector_jump',           # ← NEW
+    'velocity_oscillation',
+    'direction_change_rate',
 ]
 
 K = 5.0
+# Features where μ+5σ is too aggressive (heavy-tailed distributions)
+PERCENTILE_OVERRIDE = {
+    'direction_change_rate': 0.99,    # use 99th percentile
+    'velocity_oscillation': 0.99,
+}
 thresholds = {}
 
 print(f"{'Feature':<30} {'Mean':>12} {'Std':>12} {'Threshold (μ+5σ)':>20}")
@@ -43,6 +54,9 @@ for feat in TRACKED:
     std = df[feat].std()
     thresh = mean + K * std
     thresh = max(thresh, 1e-6)
+    if feat in PERCENTILE_OVERRIDE:
+        thresh = df[feat].quantile(PERCENTILE_OVERRIDE[feat])
+        thresh = max(thresh, 1e-6)
     thresholds[feat] = round(float(thresh), 8)
     print(f"{feat:<30} {mean:>12.6f} {std:>12.6f} {thresh:>20.6f}")
 

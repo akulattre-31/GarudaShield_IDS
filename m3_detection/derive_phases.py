@@ -29,7 +29,7 @@ speed_p50 = df['speed_3d'].quantile(0.50)
 speed_p80 = df['speed_3d'].quantile(0.80)
 
 # Hover threshold = 25th percentile of speed (bottom quarter = stationary)
-HOVER_SPEED_MAX = round(speed_p20, 4)
+HOVER_SPEED_MAX = round(max(speed_p20, 0.5),4)
 
 # Cruise threshold = 75th percentile (top quarter = actively moving)
 CRUISE_SPEED_MIN = round(speed_p80, 4)
@@ -76,7 +76,7 @@ else:
 # ============================================================
 # Only compute heading when drone is moving meaningfully
 # Use median horizontal speed as the boundary
-MOVING_SPEED_MIN = round(df['speed_horiz'].quantile(0.25), 4)
+MOVING_SPEED_MIN = round(max(df['speed_horiz'].quantile(0.25), 0.5),4)
 
 # ============================================================
 # Output

@@ -171,6 +171,16 @@ def emit_alert(master, attack_type, confidence, source, features=None):
         if len(unknown_anomalies) % 5 == 0:
             save_unknown_anomalies()
 
+    # Dispatch failsafe to the drone FIRST, so the dashboard alert can
+    # report which action was actually taken alongside the detection.
+    failsafe_result = False
+    try:
+        failsafe_result = dispatch_failsafe(master, attack_type, confidence, source=source)
+    except Exception as e:
+        print(f"[M3] Failsafe error: {e}")
+
+    failsafe_mode = failsafe_result[0] if failsafe_result else None
+
     alert = {
         'timestamp': time.time(),
         'iso_time': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
@@ -178,6 +188,7 @@ def emit_alert(master, attack_type, confidence, source, features=None):
         'confidence': round(confidence, 3),
         'source': source,
         'latency_ms': latency_ms,
+        'failsafe_mode': failsafe_mode,   # BRAKE / LAND / RTL / None
     }
 
     try:
@@ -185,12 +196,8 @@ def emit_alert(master, attack_type, confidence, source, features=None):
     except Exception as e:
         print(f"[M3] Alert send failed: {e}")
 
-    print(f"[M3] 🚨 {attack_type} (conf={confidence:.2f}, src={source})")
-
-    try:
-        dispatch_failsafe(master, attack_type, confidence, source=source)
-    except Exception as e:
-        print(f"[M3] Failsafe error: {e}")
+    suffix = f" → failsafe={failsafe_mode}" if failsafe_mode else ""
+    print(f"[M3] 🚨 {attack_type} (conf={confidence:.2f}, src={source}){suffix}")
 
 
 def detect_flight_phase(vx_series, vy_series, vz_series, alt_series):

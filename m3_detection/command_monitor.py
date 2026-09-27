@@ -33,6 +33,17 @@ FIX (sysid filtering):
   missed ARM_DISARM_ATTACK / MODE_CHANGE_ATTACK). Fixed by filtering
   on sysid instead (same pattern as cyber_engine.SequenceValidator),
   applied to every message type this class consumes.
+
+FIX (grace period):
+  Every normal flight legitimately arms once and often switches mode
+  once (e.g. STABILIZE -> GUIDED) before takeoff. The original rules
+  ('any arm/mode transition is suspicious') flagged that first, totally
+  normal transition as an attack. Fixed with a grace period: the first
+  arm transition and first mode transition observed are treated as
+  expected pre-flight setup and NOT counted toward the alerting
+  features. Any transition after that (a mid-flight disarm, a forced
+  mode change once already flying — which is what the reference attack
+  scripts actually do) is still counted exactly as before.
 """
 
 import time
@@ -47,9 +58,14 @@ class CommandMonitor:
     Call snapshot() to get aggregated features for the current window.
     """
 
-    def __init__(self, window_sec=1.0, expected_sysid=1):
+    def __init__(self, window_sec=1.0, expected_sysid=1,
+                 arm_grace=1, mode_grace=1):
         self.window_sec = window_sec
         self.expected_sysid = expected_sysid
+        self.arm_grace = arm_grace       # # of arm transitions to exempt
+        self.mode_grace = mode_grace     # # of mode transitions to exempt
+        self._arm_transitions_seen = 0
+        self._mode_transitions_seen = 0
 
         # State trackers
         self.last_mode = None
@@ -113,11 +129,21 @@ class CommandMonitor:
             armed = bool(msg.base_mode & 128)  # MAV_MODE_FLAG_SAFETY_ARMED
 
             if self.last_mode is not None and mode != self.last_mode:
-                self.mode_change_times.append(now)
+                self._mode_transitions_seen += 1
+                if self._mode_transitions_seen > self.mode_grace:
+                    self.mode_change_times.append(now)
+                else:
+                    print(f"[CmdMonitor] Mode change #{self._mode_transitions_seen} "
+                          f"treated as expected pre-flight setup — not flagged")
             self.last_mode = mode
 
             if self.last_armed is not None and armed != self.last_armed:
-                self.arm_change_times.append(now)
+                self._arm_transitions_seen += 1
+                if self._arm_transitions_seen > self.arm_grace:
+                    self.arm_change_times.append(now)
+                else:
+                    print(f"[CmdMonitor] Arm/disarm change #{self._arm_transitions_seen} "
+                          f"treated as expected pre-flight arm — not flagged")
             self.last_armed = armed
 
         # -------- ATTITUDE: yaw rate tracking --------

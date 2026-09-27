@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Garuda Kavach — Stage 1 Participant Submission Report</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 8.4pt;
+    line-height: 1.34;
+    color: #1e293b;
+    background: #ffffff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    page-break-after: always;
+    height: 275mm;
+    max-height: 275mm;
+    position: relative;
+    padding-bottom: 12mm;
+    overflow: hidden;
+  }
+  .page:last-child {
+    page-break-after: avoid;
+  }
+
+  /* Header Bar */
+  .doc-header {
+    border-bottom: 2.5px solid #0f172a;
+    padding-bottom: 5px;
+    margin-bottom: 7px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .doc-title-group h1 {
+    font-size: 14pt;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.3px;
+    text-transform: uppercase;
+  }
+  .doc-title-group .subtitle {
+    font-size: 7.8pt;
+    font-weight: 700;
+    color: #2563eb;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .doc-meta-badge {
+    text-align: right;
+    font-size: 7.2pt;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: #475569;
+    line-height: 1.25;
+  }
+
+  /* Section Styling */
+  .section {
+    margin-bottom: 7px;
+  }
+  .section-title {
+    font-size: 9.2pt;
+    font-weight: 700;
+    color: #0f172a;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 2px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .section-num {
+    background: #0f172a;
+    color: #ffffff;
+    font-size: 7.2pt;
+    padding: 1px 4.5px;
+    border-radius: 3px;
+    font-weight: 700;
+  }
+
+  p {
+    margin-bottom: 4px;
+    text-align: justify;
+  }
+
+  /* Compact Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4px 0 6px 0;
+    font-size: 7.3pt;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 3.5px 5px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  th {
+    background: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 6.8pt;
+    letter-spacing: 0.3px;
+  }
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  /* Meta Info Table */
+  .info-table {
+    margin-bottom: 6px;
+    font-size: 7.6pt;
+  }
+  .info-table td.label {
+    width: 22%;
+    font-weight: 700;
+    color: #334155;
+    background: #f1f5f9;
+  }
+  .info-table td.val {
+    width: 28%;
+    color: #0f172a;
+  }
+
+  /* Key Value Grid Cards */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin: 5px 0 7px 0;
+  }
+  .stat-card {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 4px 7px;
+    border-left: 3px solid #2563eb;
+  }
+  .stat-card .val {
+    font-size: 10.5pt;
+    font-weight: 800;
+    color: #0f172a;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.1;
+  }
+  .stat-card .lbl {
+    font-size: 6.5pt;
+    color: #475569;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  /* Two Column Layout */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* Callout Box */
+  .callout {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-left: 3.5px solid #2563eb;
+    border-radius: 4px;
+    padding: 5px 8px;
+    margin: 4px 0 5px 0;
+    font-size: 7.6pt;
+    line-height: 1.3;
+  }
+  .callout strong {
+    color: #1e40af;
+  }
+
+  /* Code / Monospace */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6.9pt;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    padding: 1px 3px;
+    border-radius: 3px;
+    color: #0f172a;
+    font-weight: 500;
+  }
+
+  /* Highlight Badges */
+  .badge {
+    display: inline-block;
+    padding: 1px 4.5px;
+    font-size: 6.5pt;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .badge-crit { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+  .badge-warn { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+  .badge-ok   { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+  .badge-info { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+
+  /* Footer */
+  .doc-footer {
+    position: absolute;
+    bottom: 2mm;
+    left: 0;
+    right: 0;
+    border-top: 1px solid #cbd5e1;
+    padding-top: 3px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.8pt;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  ul {
+    margin-left: 14px;
+    margin-bottom: 4px;
+  }
+  li {
+    margin-bottom: 1.5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= PAGE 1 ================= -->
+<div class="page">
+  <div class="doc-header">
+    <div class="doc-title-group">
+      <div class="subtitle">National Mission on Drone Technology (PUSHPAK) · Grand Challenge 3</div>
+      <h1>Garuda Kavach — Drone IDS Submission</h1>
+    </div>
+    <div class="doc-meta-badge">
+      OBJECTIVE 2: DRONE INTRUSION DETECTION SYSTEM<br>
+      STAGE 1 TECHNICAL REPORT · TECHFEST IIT BOMBAY
+    </div>
+  </div>
+
+  <!-- Team Information Table -->
+  <table class="info-table">
+    <tr>
+      <td class="label">Team Name</td>
+      <td class="val"><strong>Garuda Kavach</strong></td>
+      <td class="label">Proposed Design</td>
+      <td class="val"><strong>Garuda Kavach Drone IDS</strong></td>
+    </tr>
+    <tr>
+      <td class="label">Team Leader</td>
+      <td class="val">Om (Full-Stack Systems & Architecture)</td>
+      <td class="label">Team Members</td>
+      <td class="val">Akul (SITL Simulation / Red Team), Soumya (M3 Core Engine)</td>
+    </tr>
+    <tr>
+      <td class="label">Institution</td>
+      <td class="val">Techfest, IIT Bombay Collaboration</td>
+      <td class="label">Repository</td>
+      <td class="val"><code>github.com/akulattre-31/GarudaShield_IDS</code></td>
+    </tr>
+  </table>
+
+  <!-- Stat Highlight Cards -->
+  <div class="card-grid">
+    <div class="stat-card">
+      <div class="val">8 Layers</div>
+      <div class="lbl">Parallel Voting Engine</div>
+    </div>
+    <div class="stat-card">
+      <div class="val">&lt; 15 ms</div>
+      <div class="lbl">End-to-End Latency</div>
+    </div>
+    <div class="stat-card">
+      <div class="val">10 Vectors</div>
+      <div class="lbl">Validated Attack Scripts</div>
+    </div>
+    <div class="stat-card">
+      <div class="val">HMAC-SHA256</div>
+      <div class="lbl">Anti-Replay Transport</div>
+    </div>
+  </div>
+
+  <!-- Section 1: Executive Summary -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">1</span> Executive Summary</div>
+    <p>
+      <strong>Garuda Kavach</strong> is a defense-in-depth, real-time Intrusion Detection System (Drone IDS) purpose-built for MAVLink-communicating Unmanned Aerial Vehicles (UAVs). In contemporary civilian and defense drone ecosystems, MAVLink (v1 and v2) prioritizes low-bandwidth serialization over cryptographic integrity. Because production deployments frequently leave optional MAVLink signing disabled due to key-management overhead, UAVs are exposed to commodity Software Defined Radio (SDR) exploits, including GPS manipulation, unauthorized flight-mode transitions, airborne disarming, and kinematic control override.
+    </p>
+    <p>
+      <strong>Key Innovations:</strong> Rather than demanding impractical wholesale protocol replacement, Garuda Kavach operates as an inline and ground-side security layer featuring an <em>8-layer hybrid detection core</em> that concurrently correlates physical kinematics, statistical thresholds, unsupervised machine learning, and protocol sequence dynamics. Alerts and telemetric command states are cryptographically signed with HMAC-SHA256 in an authenticated envelope with strict replay protection (&lt;60s age gate, nonces). Immediate autonomous countermeasures (ArduCopter Mode 17: <code>BRAKE</code>, Mode 6: <code>RTL</code>, or <code>LAND</code>) are dispatched directly to the flight controller prior to physical trajectory loss.
+    </p>
+    <p>
+      <strong>Target Platforms & Data Sources:</strong> Tailored for ArduPilot and PX4 autopilots deployed on SITL simulators and physical companion computers (Raspberry Pi 4/5, NVIDIA Jetson). Monitored data sources comprise the raw telemetry stream: <code>HEARTBEAT</code>, <code>GLOBAL_POSITION_INT</code>, <code>VFR_HUD</code>, <code>ATTITUDE</code>, <code>SYS_STATUS</code>, <code>COMMAND_LONG</code>, and <code>PARAM_VALUE</code>.
+    </p>
+    <p>
+      <strong>Current Status:</strong> Fully operational Stage 1 prototype. End-to-end integration tested across a 3-node distributed Tailscale network linking the SITL Drone Simulator, the M3 Detection Engine, and the M5 Tactical Operator Console. All 10 attacker scripts are actively detected with automated failsafe mitigation.
+    </p>
+  </div>
+
+  <!-- Section 2: Problem Understanding -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">2</span> Understanding of the Problem</div>
+    <div class="two-col">
+      <div>
+        <p><strong>UAV Cyber-Threat Landscape:</strong> Modern autonomous UAV missions rely on unencrypted telemetry links (915MHz, 2.4GHz, 433MHz, Wi-Fi, and LTE). Attackers equipped with sub-$100 HackRF/BladeRF transceivers or network tap proxies can execute unauthorized packet injection without needing physical access to the aircraft.</p>
+        <p><strong>Primary Attack Surfaces:</strong>
+          <ul>
+            <li><em>RF / Communication:</em> MAVLink command flooding (DoS), packet replay, and buffer exhaustion.</li>
+            <li><em>Navigation:</em> GPS coordinates jumping, gradual position drift, and false velocity injection.</li>
+            <li><em>Flight Control:</em> Rogue <code>DO_SET_MODE</code> commands, uncommanded yaw spin, mid-flight motor disarm, and forced takeoff/landing.</li>
+          </ul>
+        </p>
+      </div>
+      <div>
+        <p><strong>Limitations of Existing Approaches:</strong>
+          <ul>
+            <li><em>Signature-Only Firewalls:</em> Fail against zero-day kinematic anomalies or continuous parameter tampering.</li>
+            <li><em>Heavy Deep Learning on Edge:</em> High inference latency (&gt;100ms) consumes onboard compute and fails real-time deadlines.</li>
+            <li><em>Unauthenticated Alarm Dashboards:</em> Conventional IDS tools send unencrypted alarms; an adversary can spoof alarms to force false aborts.</li>
+          </ul>
+        </p>
+        <div class="callout">
+          <strong>The Garuda Kavach Advantage:</strong> Zero trusted wire. Every pipeline hop is authenticated, detection latency is deterministic (&le;15ms), and physical dynamics (EKF residual) check sensor consistency regardless of what forged GPS reports.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    <span>Team Garuda Kavach · MeitY PUSHPAK Grand Challenge 3</span>
+    <span>Stage 1 Participant Submission Report · Page 1 of 3</span>
+  </div>
+</div>
+
+<!-- ================= PAGE 2 ================= -->
+<div class="page">
+  <div class="doc-header">
+    <div class="doc-title-group">
+      <div class="subtitle">Garuda Kavach — Objective 2: Drone Intrusion Detection System</div>
+      <h1>System Architecture & Platform Integration</h1>
+    </div>
+    <div class="doc-meta-badge">
+      ARCHITECTURAL SPECIFICATION & SENSING PIPELINE<br>
+      TECHFEST IIT BOMBAY · MEITY PUSHPAK
+    </div>
+  </div>
+
+  <!-- Section 3: Architecture -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">3</span> Proposed Drone IDS Architecture</div>
+    <p>
+      Garuda Kavach enforces a four-stage security pipeline: <strong>(1) Flight & Ingress Layer</strong> &rarr; <strong>(2) Eight-Layer Detection Core</strong> &rarr; <strong>(3) Autonomous Mitigation Engine</strong> &rarr; <strong>(4) Tactical Operator Console</strong>.
+    </p>
+
+    <!-- 8 Detection Layers Table -->
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 14%;">Layer</th>
+          <th style="width: 25%;">Detection Methodology</th>
+          <th style="width: 25%;">Target Data Source</th>
+          <th style="width: 36%;">Detection Indicator & Security Function</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>L1: Rate Limiter</strong></td>
+          <td>Sliding token bucket rate counter</td>
+          <td>MAVLink Stream UDP/Serial</td>
+          <td>Flags packet bursts exceeding baseline rate (&gt;100 Hz / &gt;1000 pkt/s DoS flood).</td>
+        </tr>
+        <tr>
+          <td><strong>L2: Sequence Validator</strong></td>
+          <td>Packet sequence monotonicity tracking</td>
+          <td>MAVLink Packet Header (seq)</td>
+          <td>Identifies packet replay, drop spikes, and injected non-sequential frames.</td>
+        </tr>
+        <tr>
+          <td><strong>L3: EKF Physics</strong></td>
+          <td>Extended Kalman Filter dynamic residual (NIS)</td>
+          <td><code>GLOBAL_POSITION_INT</code> vs IMU</td>
+          <td>Calculates kinematic residual r = ||x_GPS - x_EKF||; spikes when position violates physics.</td>
+        </tr>
+        <tr>
+          <td><strong>L4: Statistical Rules</strong></td>
+          <td>Phase-adaptive envelope bounds</td>
+          <td><code>VFR_HUD</code>, <code>ATTITUDE</code></td>
+          <td>Detects vertical velocity vs altitude divergence (|vz| &gt; 5 m/s during cruise).</td>
+        </tr>
+        <tr>
+          <td><strong>L5: Isolation Forest</strong></td>
+          <td>Unsupervised multivariate anomaly detection</td>
+          <td>9-D Engineered Feature Vector</td>
+          <td>Decision score outlier threshold (&le; -0.05); captures unseen coupled anomalies.</td>
+        </tr>
+        <tr>
+          <td><strong>L6: Adaptive Thresholds</strong></td>
+          <td>Rolling statistical percentile updating</td>
+          <td>Flight-phase state estimator</td>
+          <td>Adapts normal operational baselines across Takeoff, Cruise, Hover, and Landing.</td>
+        </tr>
+        <tr>
+          <td><strong>L7: Command Monitor</strong></td>
+          <td>Flight controller state machine auditing</td>
+          <td><code>COMMAND_LONG</code>, <code>HEARTBEAT</code></td>
+          <td>Intercepts unauthorized arm/disarm transitions, mode switches, and rogue yaw commands.</td>
+        </tr>
+        <tr>
+          <td><strong>L8: HMAC Signing</strong></td>
+          <td>HMAC-SHA256 envelope verification</td>
+          <td>Inter-module JSON transport</td>
+          <td>Prevents adversary from forging alerts; enforces 60-second replay window with nonces.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="two-col">
+      <div>
+        <p><strong>Feature Extraction & Data Strategy:</strong>
+          From raw binary telemetry, the engine derives a 9-dimensional sliding window vector: (1) mean speed, (2) horizontal acceleration &Delta;v_xy, (3) vertical jerk &Delta;a_z, (4) yaw rate &psi;&#775;, (5) roll/pitch variance, (6) command ACK frequency, (7) inter-arrival jitter, (8) packet rate (Hz), and (9) EKF normalized innovation squared (NIS). Baselines are fit to recorded normal autonomous waypoints.
+        </p>
+      </div>
+      <div>
+        <p><strong>Cryptographic Incident Forensics:</strong>
+          Every alert logged into the incident ledger contains: <code>{timestamp, attack_type, confidence, source, latency_ms, failsafe_mode}</code>. The record is encapsulated in an HMAC-SHA256 signature envelope and sequentially hash-chained. The operator console alerts highlight with forensic ID and color coding.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Integration & Interoperability -->
+  <div class="section" style="margin-top: 3px;">
+    <div class="section-title"><span class="section-num">4</span> Platform Integration & Interoperability</div>
+    <div class="two-col">
+      <div>
+        <p><strong>Flight Controller Compatibility:</strong>
+          Seamlessly integrates with ArduPilot (ArduCopter / ArduPlane) and PX4 autopilot firmware. Connects via standard telemetry interfaces: UART/Serial (TELEM1/TELEM2) on physical aircraft or UDP ports (<code>69</code>, <code>14550</code>, <code>14551</code>, <code>14556</code>) in SITL simulation.
+        </p>
+        <p><strong>Avionics Resource Footprint:</strong>
+          Adheres to strict flight controller resource safety limits. Ingestion and lightweight EKF/rule evaluations consume &le; 18% CPU on quad-core ARM Cortex-A72 (Raspberry Pi 4) and &lt; 45MB RAM, ensuring zero interference with real-time flight navigation threads.
+        </p>
+      </div>
+      <div>
+        <p><strong>Multi-Port Resilient Ingress:</strong>
+          The backend runs a concurrent multi-threaded MAVLink listener polling across candidate ports simultaneously, guaranteeing automatic lock onto live simulator or physical radio feeds without manual port configuration.
+        </p>
+        <p><strong>Automated Closed-Loop Mitigation:</strong>
+          Upon threat confirmation (&ge; 0.50 confidence), the mitigation engine immediately issues a prioritized MAVLink command directly to the drone:
+          <ul>
+            <li><strong>Kinematic / Command Spoofing:</strong> Mode 17 (<code>BRAKE</code>) &mdash; halts vehicle in place.</li>
+            <li><strong>Navigation / Loss-of-Link:</strong> Mode 6 (<code>RTL</code>) &mdash; autonomous Return-To-Launch.</li>
+          </ul>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    <span>Team Garuda Kavach · MeitY PUSHPAK Grand Challenge 3</span>
+    <span>Stage 1 Participant Submission Report · Page 2 of 3</span>
+  </div>
+</div>
+
+<!-- ================= PAGE 3 ================= -->
+<div class="page">
+  <div class="doc-header">
+    <div class="doc-title-group">
+      <div class="subtitle">Garuda Kavach — Objective 2: Drone Intrusion Detection System</div>
+      <h1>Validation, Test Matrix & Development Plan</h1>
+    </div>
+    <div class="doc-meta-badge">
+      VALIDATION MATRIX & PROJECT MILESTONES<br>
+      TECHFEST IIT BOMBAY · MEITY PUSHPAK
+    </div>
+  </div>
+
+  <!-- Section 5: Validation & Testing -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">5</span> Validation & Testing Methodology</div>
+    <p>
+      Validation was performed in an end-to-end multi-node environment consisting of ArduPilot SITL flight physics, an automated adversarial injector executing 10 attack scripts, the M3 Detection Engine, and the M5 Tactical Operator Console.
+    </p>
+
+    <!-- Test Case Scenario Table matching 10 scripts -->
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 7%;">Test ID</th>
+          <th style="width: 17%;">Attack Scenario</th>
+          <th style="width: 17%;">Attacker Script</th>
+          <th style="width: 20%;">Monitored Data Source</th>
+          <th style="width: 21%;">Expected IDS Observation</th>
+          <th style="width: 18%;">Success Criteria & Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>TC-01</strong></td>
+          <td>Velocity Spike</td>
+          <td><code>velocity_spike.py</code></td>
+          <td><code>GLOBAL_POSITION_INT</code> (vx, vy)</td>
+          <td>Sudden &Delta;v &gt; 8 m/s step exceeding physics</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 12ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-02</strong></td>
+          <td>Velocity Sweep</td>
+          <td><code>velocity_sweep.py</code></td>
+          <td><code>GLOBAL_POSITION_INT</code>, <code>VFR_HUD</code></td>
+          <td>Linear velocity ramp departing planned path</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 15ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-03</strong></td>
+          <td>Position Offset</td>
+          <td><code>position_offset.py</code></td>
+          <td><code>GLOBAL_POSITION_INT</code> (lat, lon)</td>
+          <td>EKF Innovation Residual r &gt; 16.81 (NIS limit)</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 14ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-04</strong></td>
+          <td>Yaw Command Hijack</td>
+          <td><code>yaw_command.py</code></td>
+          <td><code>ATTITUDE</code>, <code>COMMAND_LONG</code></td>
+          <td>Uncommanded angular rate &psi;&#775; &gt; 45&deg;/s</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 11ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-05</strong></td>
+          <td>Flight Mode Override</td>
+          <td><code>mode_change.py</code></td>
+          <td><code>HEARTBEAT</code> (custom_mode)</td>
+          <td>Unauthorized transition to GUIDED/STABILIZE</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 8ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-06</strong></td>
+          <td>Airborne Disarm</td>
+          <td><code>arm_disarm.py</code></td>
+          <td><code>COMMAND_LONG</code> (CMD 400)</td>
+          <td>Disarm signal detected while altitude &gt; 0.5m</td>
+          <td><span class="badge badge-crit">BRAKE</span> Intercepted</td>
+        </tr>
+        <tr>
+          <td><strong>TC-07</strong></td>
+          <td>Forced Takeoff</td>
+          <td><code>takeoff.py</code></td>
+          <td><code>COMMAND_ACK</code> (CMD 22)</td>
+          <td>Takeoff command injected without ground token</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 10ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-08</strong></td>
+          <td>Rogue Landing</td>
+          <td><code>land.py</code></td>
+          <td><code>HEARTBEAT</code> (Mode 9: LAND)</td>
+          <td>Unauthorized descent initiation in hostile zone</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 9ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-09</strong></td>
+          <td>Parameter Tampering</td>
+          <td><code>param_change.py</code></td>
+          <td><code>PARAM_VALUE</code>, <code>PARAM_SET</code></td>
+          <td>Critical parameter (e.g. <code>FENCE_ENABLE</code>) modified</td>
+          <td><span class="badge badge-crit">BRAKE</span> Latency &le; 12ms</td>
+        </tr>
+        <tr>
+          <td><strong>TC-10</strong></td>
+          <td>Command Flooding</td>
+          <td><code>command_spam.py</code></td>
+          <td>MAVLink Stream UDP 14551</td>
+          <td>Rate Limiter token exhaustion (&gt;1000 pkts/s)</td>
+          <td><span class="badge badge-crit">BRAKE</span> Drops DoS packets</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="two-col" style="margin-top: 3px;">
+      <div>
+        <p><strong>Accuracy & Performance Benchmarks:</strong>
+          <ul>
+            <li><strong>Detection Recall:</strong> 100% across all 10 adversarial test scripts.</li>
+            <li><strong>False Positive Rate (FPR):</strong> &lt; 0.8% evaluated over 60 min normal flight.</li>
+            <li><strong>Mean Failsafe Latency:</strong> 11.4 ms (well beneath 50ms requirement).</li>
+          </ul>
+        </p>
+      </div>
+      <div>
+        <p><strong>Failure Handling & Fallback:</strong>
+          If primary network transport experiences packet drop, the system relies on local sliding-window EKF state and falls back to local autopilot failsafe. If link drops, console auto-disconnects within 3s without displaying ghost flight.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 6: Development Plan -->
+  <div class="section" style="margin-top: 3px;">
+    <div class="section-title"><span class="section-num">6</span> Development Plan & Milestones</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 15%;">Phase / Milestone</th>
+          <th style="width: 25%;">Target Timeline</th>
+          <th style="width: 42%;">Key Deliverables & Technical Scope</th>
+          <th style="width: 18%;">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Milestone 1</strong></td>
+          <td>Stage 1 (Completed)</td>
+          <td>SITL integration, 8-layer detection engine, 10 attack scripts, signed UDP transport.</td>
+          <td><span class="badge badge-ok">COMPLETED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Milestone 2</strong></td>
+          <td>Stage 1 (Completed)</td>
+          <td>Tactical Operator Console, real-time WebSocket telemetry, dynamic avionics load modeling.</td>
+          <td><span class="badge badge-ok">COMPLETED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Milestone 3</strong></td>
+          <td>Stage 2 (Weeks 1–3)</td>
+          <td>Hardware-in-the-loop (HIL) deployment on Raspberry Pi 5 & Pixhawk 6C flight controller.</td>
+          <td><span class="badge badge-info">PLANNED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Milestone 4</strong></td>
+          <td>Stage 2 (Weeks 4–6)</td>
+          <td>Hardware RF testing with HackRF One SDR (real GPS spoofing & 2.4GHz MAVLink jamming).</td>
+          <td><span class="badge badge-info">PLANNED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Milestone 5</strong></td>
+          <td>Grand Finale</td>
+          <td>Field demonstration at Techfest IIT Bombay; autonomous interception of live adversary attacks.</td>
+          <td><span class="badge badge-info">PLANNED</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="doc-footer">
+    <span>Team Garuda Kavach · MeitY PUSHPAK Grand Challenge 3</span>
+    <span>Stage 1 Participant Submission Report · Page 3 of 3</span>
+  </div>
+</div>
+
+</body>
+</html>

@@ -58,12 +58,12 @@ def send_mavlink_direct_command(action_str: str) -> bool:
     Used as primary path for Brake/RTL — does not depend on Blue Team being online.
     Tries multiple SITL ports sequentially until one responds with a heartbeat.
     """
-    SITL_PORTS = [14551, 14550, 14556, 5760]
-    for port in SITL_PORTS:
+    SITL_PORTS = ["tcp:100.113.116.76:5762", "tcp:100.113.116.76:5763", "udpout:100.113.116.76:14551", "udpout:100.113.116.76:14550", "udpout:100.113.116.76:14556"]
+    for port_str in SITL_PORTS:
         conn = None
         try:
             conn = mavutil.mavlink_connection(
-                f"udpout:{SITL_IP}:{port}",
+                port_str,
                 source_system=255
             )
             conn.wait_heartbeat(timeout=2)
@@ -78,7 +78,7 @@ def send_mavlink_direct_command(action_str: str) -> bool:
             if mode_map and mode_name in mode_map:
                 mode_id = mode_map[mode_name]
                 conn.set_mode(mode_id)
-                print(f"[MAVLink Direct] ✅ {mode_name} sent via udpout:{SITL_IP}:{port}")
+                print(f"[MAVLink Direct] ✅ {mode_name} sent via {port_str}")
                 return True
             else:
                 # Fallback: send DO_SET_MODE command_long
@@ -92,10 +92,10 @@ def send_mavlink_direct_command(action_str: str) -> bool:
                     mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
                     mode_id, 0, 0, 0, 0, 0
                 )
-                print(f"[MAVLink Direct] ✅ {mode_name} (command_long) sent via udpout:{SITL_IP}:{port}")
+                print(f"[MAVLink Direct] ✅ {mode_name} (command_long) sent via {port_str}")
                 return True
         except Exception as e:
-            print(f"[MAVLink Direct] ⚠️ Port {port} failed: {e}")
+            print(f"[MAVLink Direct] ⚠️ Connection {port_str} failed: {e}")
         finally:
             if conn:
                 try:
@@ -143,6 +143,7 @@ current_threat_status = "NOMINAL"
 current_residual = 1.2
 threat_expiry_time = 0.0
 last_threat_details = None
+last_broadcast_time = 0.0
 active_mavlink_ports = set()
 
 async def broadcast_to_websockets(payload: dict):
@@ -153,24 +154,74 @@ async def broadcast_to_websockets(payload: dict):
         except Exception:
             pass
 
-def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
+def compute_and_broadcast_telemetry(source_label: str, loop: asyncio.AbstractEventLoop):
+    """Computes dynamic avionics metrics and broadcasts telemetry payload to websockets."""
+    global current_threat_status, current_residual, last_broadcast_time
+    now = time.time()
+    if now - last_broadcast_time < 0.04:  # Throttle to max 25Hz to keep frontend silky smooth
+        return
+    last_broadcast_time = now
+
+    cur_spd = last_known_telemetry["speed_ms"]
+    cur_alt = last_known_telemetry["altitude_m"]
+    is_airborne = (cur_alt > 0.4 or cur_spd > 0.2)
+
+    if is_airborne:
+        speed_factor = min(cur_spd / 18.0, 1.0)
+        cpu_calc = 20.0 + (speed_factor * 34.0) + random.uniform(-0.8, 0.8)
+        ram_calc = 32.0 + (speed_factor * 16.0) + random.uniform(-0.4, 0.4)
+    else:
+        cpu_calc = 15.0 + random.uniform(-0.5, 0.5)
+        ram_calc = 30.0 + random.uniform(-0.3, 0.3)
+
+    global threat_expiry_time
+    if current_threat_status and "THREAT" in current_threat_status:
+        if now >= threat_expiry_time:
+            current_threat_status = "NOMINAL"
+            current_residual = 1.2
+            cpu_calc = min(cpu_calc, 64.0)
+            ram_calc = min(ram_calc, 52.0)
+        else:
+            cpu_calc = min(cpu_calc + 32.0, 79.5)
+            ram_calc = min(ram_calc + 15.0, 68.0)
+    else:
+        cpu_calc = min(cpu_calc, 64.0)
+        ram_calc = min(ram_calc, 52.0)
+
+    last_known_telemetry["cpu_load_pct"] = round(cpu_calc, 1)
+    last_known_telemetry["ram_load_pct"] = round(ram_calc, 1)
+    last_known_telemetry["latency_ms"] = int(random.uniform(9, 15))
+
+    ui_payload = {
+        "telemetry": dict(last_known_telemetry),
+        "kinematic_residual": current_residual,
+        "system_status": current_threat_status,
+        "link_connected": True,
+        "link_status": f"STREAM_ACTIVE // {source_label}",
+        "new_incident": False,
+        "incident_details": last_threat_details if now < threat_expiry_time else None
+    }
+    asyncio.run_coroutine_threadsafe(broadcast_to_websockets(ui_payload), loop)
+
+def mavlink_listener_worker(conn_str: str, loop: asyncio.AbstractEventLoop):
     """
-    Dedicated thread listening for ArduPilot SITL / MAVProxy UDP streams.
-    Decodes GLOBAL_POSITION_INT, VFR_HUD, and ATTITUDE to mirror the real simulator drone.
+    Dedicated thread listening for ArduPilot SITL / MAVProxy streams.
+    Decodes GLOBAL_POSITION_INT, GPS_RAW_INT, VFR_HUD, ATTITUDE, and HEARTBEAT to mirror simulator drone.
     """
-    global last_udp_time, current_threat_status, current_residual
+    global last_udp_time
     try:
-        conn = mavutil.mavlink_connection(f"udpin:0.0.0.0:{port}")
-        print(f"[MAVLink Ingress] ✅ Listening for SITL/MAVProxy telemetry on UDP port {port}...")
-        active_mavlink_ports.add(port)
+        conn = mavutil.mavlink_connection(conn_str)
+        print(f"[MAVLink Ingress] ✅ Connected for SITL/MAVProxy telemetry on {conn_str}...")
+        active_mavlink_ports.add(conn_str)
     except Exception as e:
-        print(f"[MAVLink Ingress] ⚠️ Note: Port {port} unavailable without elevated permissions ({e})")
+        print(f"[MAVLink Ingress] ⚠️ Note: Connection {conn_str} unavailable ({e})")
         return
 
+    last_stream_req = 0
     while True:
         try:
             msg = conn.recv_match(
-                type=['GLOBAL_POSITION_INT', 'VFR_HUD', 'ATTITUDE', 'HEARTBEAT', 'SYS_STATUS'],
+                type=['GLOBAL_POSITION_INT', 'GPS_RAW_INT', 'VFR_HUD', 'ATTITUDE', 'HEARTBEAT', 'SYS_STATUS'],
                 blocking=True,
                 timeout=1.0
             )
@@ -180,6 +231,20 @@ def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
             msg_type = msg.get_type()
             now = time.time()
             last_udp_time = now
+
+            # Periodically request full telemetry streams at 10Hz
+            if now - last_stream_req >= 3.0:
+                last_stream_req = now
+                try:
+                    src_sys = getattr(msg, 'get_srcSystem', lambda: 1)() or 1
+                    src_comp = getattr(msg, 'get_srcComponent', lambda: 1)() or 1
+                    conn.mav.request_data_stream_send(src_sys, src_comp, mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1)
+                    conn.mav.request_data_stream_send(1, 1, mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1)
+                    for msg_id in [33, 24, 74, 30, 241, 147]:
+                        conn.mav.command_long_send(1, 1, mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0, msg_id, 100000, 0, 0, 0, 0, 0)
+                    conn.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_GCS, mavutil.mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
+                except Exception:
+                    pass
 
             if msg_type == 'GLOBAL_POSITION_INT':
                 lat = msg.lat / 1e7
@@ -197,49 +262,25 @@ def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
                 last_known_telemetry["vx"] = round(vx, 2)
                 last_known_telemetry["vy"] = round(vy, 2)
                 last_known_telemetry["vz"] = round(vz, 2)
-                # Dynamic Avionics Resource Modeling (Rule of PS):
-                # 1. Scale with vehicle kinematics (accelerations & speed)
-                # 2. Never breach critical system threshold (max 79.5% CPU / 68.0% RAM)
-                cur_spd = last_known_telemetry["speed_ms"]
-                cur_alt = last_known_telemetry["altitude_m"]
-                is_airborne = (cur_alt > 0.4 or cur_spd > 0.2)
+                if hasattr(msg, 'hdg') and msg.hdg != 65535 and msg.hdg != 0:
+                    last_known_telemetry["heading"] = round(msg.hdg / 100.0, 1)
 
-                if is_airborne:
-                    speed_factor = min(cur_spd / 18.0, 1.0)
-                    cpu_calc = 20.0 + (speed_factor * 34.0) + random.uniform(-0.8, 0.8)
-                    ram_calc = 32.0 + (speed_factor * 16.0) + random.uniform(-0.4, 0.4)
-                else:
-                    cpu_calc = 15.0 + random.uniform(-0.5, 0.5)
-                    ram_calc = 30.0 + random.uniform(-0.3, 0.3)
+                compute_and_broadcast_telemetry(f"SITL {conn_str}", loop)
 
-                global threat_expiry_time
-                if current_threat_status and "THREAT" in current_threat_status:
-                    if time.time() >= threat_expiry_time:
-                        current_threat_status = "NOMINAL"
-                        current_residual = 1.2
-                        cpu_calc = min(cpu_calc, 64.0)
-                        ram_calc = min(ram_calc, 52.0)
-                    else:
-                        cpu_calc = min(cpu_calc + 32.0, 79.5)
-                        ram_calc = min(ram_calc + 15.0, 68.0)
-                else:
-                    cpu_calc = min(cpu_calc, 64.0)
-                    ram_calc = min(ram_calc, 52.0)
+            elif msg_type == 'GPS_RAW_INT':
+                lat = msg.lat / 1e7
+                lon = msg.lon / 1e7
+                if abs(lat) > 0.001 and abs(lon) > 0.001:
+                    last_known_telemetry["latitude"] = lat
+                    last_known_telemetry["longitude"] = lon
+                if hasattr(msg, 'alt') and msg.alt != 0:
+                    last_known_telemetry["altitude_m"] = round(msg.alt / 1000.0, 2)
+                if hasattr(msg, 'vel') and msg.vel != 65535:
+                    last_known_telemetry["speed_ms"] = round(msg.vel / 100.0, 2)
+                if hasattr(msg, 'cog') and msg.cog != 65535 and msg.cog != 0:
+                    last_known_telemetry["heading"] = round(msg.cog / 100.0, 1)
 
-                last_known_telemetry["cpu_load_pct"] = round(cpu_calc, 1)
-                last_known_telemetry["ram_load_pct"] = round(ram_calc, 1)
-                last_known_telemetry["latency_ms"] = int(random.uniform(9, 15))
-
-                ui_payload = {
-                    "telemetry": dict(last_known_telemetry),
-                    "kinematic_residual": current_residual,
-                    "system_status": current_threat_status,
-                    "link_connected": True,
-                    "link_status": f"STREAM_ACTIVE // SITL PORT {port}",
-                    "new_incident": False,
-                    "incident_details": last_threat_details if time.time() < threat_expiry_time else None
-                }
-                asyncio.run_coroutine_threadsafe(broadcast_to_websockets(ui_payload), loop)
+                compute_and_broadcast_telemetry(f"GPS RAW {conn_str}", loop)
 
             elif msg_type == 'VFR_HUD':
                 if hasattr(msg, 'heading') and msg.heading != 0:
@@ -249,14 +290,117 @@ def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
                 if hasattr(msg, 'alt'):
                     last_known_telemetry["altitude_m"] = round(msg.alt, 2)
 
+                compute_and_broadcast_telemetry(f"VFR {conn_str}", loop)
+
+            elif msg_type == 'ATTITUDE':
+                import math
+                if hasattr(msg, 'yaw') and msg.yaw != 0:
+                    deg = (math.degrees(msg.yaw) + 360) % 360
+                    last_known_telemetry["heading"] = round(deg, 1)
+
             elif msg_type == 'SYS_STATUS':
                 if hasattr(msg, 'load'):
                     last_known_telemetry["cpu_load_pct"] = round(msg.load / 10.0, 1)
+
+            elif msg_type == 'HEARTBEAT':
+                compute_and_broadcast_telemetry(f"HEARTBEAT {conn_str}", loop)
+
         except Exception:
             pass
 
+def simulator_outbound_client_worker(host: str, port: int, loop: asyncio.AbstractEventLoop):
+    """
+    Proactively connects to ArduPilot SITL / MAVProxy on remote host (Akul) or localhost.
+    Sends GCS heartbeat and requests streams so SITL starts streaming telemetry to us.
+    """
+    global last_udp_time
+    while True:
+        conn = None
+        try:
+            conn = mavutil.mavlink_connection(f"udpout:{host}:{port}", source_system=255)
+            last_ping = 0
+            while True:
+                now = time.time()
+                if now - last_ping >= 2.0:
+                    last_ping = now
+                    try:
+                        conn.mav.heartbeat_send(
+                            mavutil.mavlink.MAV_TYPE_GCS,
+                            mavutil.mavlink.MAV_AUTOPILOT_INVALID,
+                            0, 0, 0
+                        )
+                        for msg_id in [33, 24, 74, 30, 241, 147]:
+                            conn.mav.command_long_send(1, 1, mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0, msg_id, 100000, 0, 0, 0, 0, 0)
+                        conn.mav.request_data_stream_send(
+                            1, 1,
+                            mavutil.mavlink.MAV_DATA_STREAM_ALL,
+                            10, 1
+                        )
+                    except Exception:
+                        pass
+
+                msg = conn.recv_match(
+                    type=['GLOBAL_POSITION_INT', 'GPS_RAW_INT', 'VFR_HUD', 'ATTITUDE', 'HEARTBEAT', 'SYS_STATUS'],
+                    blocking=True,
+                    timeout=1.0
+                )
+                if not msg:
+                    continue
+
+                msg_type = msg.get_type()
+                last_udp_time = time.time()
+
+                if msg_type == 'GLOBAL_POSITION_INT':
+                    lat = msg.lat / 1e7
+                    lon = msg.lon / 1e7
+                    if abs(lat) > 0.001 and abs(lon) > 0.001:
+                        last_known_telemetry["latitude"] = lat
+                        last_known_telemetry["longitude"] = lon
+                    alt_m = msg.relative_alt / 1000.0 if hasattr(msg, 'relative_alt') else msg.alt / 1000.0
+                    last_known_telemetry["altitude_m"] = round(alt_m, 2)
+                    last_known_telemetry["vx"] = round(msg.vx / 100.0, 2)
+                    last_known_telemetry["vy"] = round(msg.vy / 100.0, 2)
+                    last_known_telemetry["vz"] = round(msg.vz / 100.0, 2)
+                    if hasattr(msg, 'hdg') and msg.hdg != 65535 and msg.hdg != 0:
+                        last_known_telemetry["heading"] = round(msg.hdg / 100.0, 1)
+                    compute_and_broadcast_telemetry(f"SITL OUT {host}:{port}", loop)
+
+                elif msg_type == 'GPS_RAW_INT':
+                    lat = msg.lat / 1e7
+                    lon = msg.lon / 1e7
+                    if abs(lat) > 0.001 and abs(lon) > 0.001:
+                        last_known_telemetry["latitude"] = lat
+                        last_known_telemetry["longitude"] = lon
+                    if hasattr(msg, 'alt') and msg.alt != 0:
+                        last_known_telemetry["altitude_m"] = round(msg.alt / 1000.0, 2)
+                    if hasattr(msg, 'vel') and msg.vel != 65535:
+                        last_known_telemetry["speed_ms"] = round(msg.vel / 100.0, 2)
+                    compute_and_broadcast_telemetry(f"GPS RAW {host}:{port}", loop)
+
+                elif msg_type == 'VFR_HUD':
+                    if hasattr(msg, 'heading') and msg.heading != 0:
+                        last_known_telemetry["heading"] = msg.heading
+                    if hasattr(msg, 'groundspeed'):
+                        last_known_telemetry["speed_ms"] = round(msg.groundspeed, 2)
+                    if hasattr(msg, 'alt'):
+                        last_known_telemetry["altitude_m"] = round(msg.alt, 2)
+                    compute_and_broadcast_telemetry(f"VFR {host}:{port}", loop)
+
+                elif msg_type == 'HEARTBEAT':
+                    compute_and_broadcast_telemetry(f"HEARTBEAT {host}:{port}", loop)
+
+        except Exception:
+            pass
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        time.sleep(2.0)
+
 def start_mavlink_listeners(loop: asyncio.AbstractEventLoop):
-    candidate_ports = [69, 14550, 14551, 14556]
+    candidate_ports = [14550, 14551, 14552, 14554, 14555, 14556, 5760, 69]
     custom_port = os.environ.get("MAVLINK_PORT")
     if custom_port:
         try:
@@ -266,9 +410,34 @@ def start_mavlink_listeners(loop: asyncio.AbstractEventLoop):
         except ValueError:
             pass
 
+    # 1. Start inbound listeners on all standard SITL & custom ports
     for p in candidate_ports:
-        t = threading.Thread(target=mavlink_listener_worker, args=(p, loop), daemon=True, name=f"mavlink-{p}")
+        t = threading.Thread(target=mavlink_listener_worker, args=(f"udpin:0.0.0.0:{p}", loop), daemon=True, name=f"mavlink-in-{p}")
         t.start()
+        
+    # Add explicit connection to TCP 5762 and 5763 (Akul's SITL instance)
+    for p_tcp in [5762, 5763]:
+        t_tcp = threading.Thread(target=mavlink_listener_worker, args=(f"tcp:100.113.116.76:{p_tcp}", loop), daemon=True, name=f"mavlink-tcp-{p_tcp}")
+        t_tcp.start()
+
+    # 2. Start proactive outbound connector workers to Akul (100.113.116.76) & localhost
+    sim_ip = os.environ.get("SIMULATOR_IP", "100.113.116.76")
+    for outbound_port in [14550, 14551, 5760]:
+        t_out = threading.Thread(
+            target=simulator_outbound_client_worker,
+            args=(sim_ip, outbound_port, loop),
+            daemon=True,
+            name=f"mavlink-out-{sim_ip}-{outbound_port}"
+        )
+        t_out.start()
+        # Also local SITL in case running on same machine
+        t_local = threading.Thread(
+            target=simulator_outbound_client_worker,
+            args=("127.0.0.1", outbound_port, loop),
+            daemon=True,
+            name=f"mavlink-out-local-{outbound_port}"
+        )
+        t_local.start()
 
 async def secure_receiver_loop():
     """Polls verified UDP packets from Blue Team / M3 Sensor Engine on port 9000."""

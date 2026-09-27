@@ -50,6 +50,61 @@ active_websockets = set()
 last_udp_time = 0
 tasks = []
 
+SITL_IP = os.environ.get("SITL_IP", "100.113.116.76")
+
+def send_mavlink_direct_command(action_str: str) -> bool:
+    """
+    Sends MAVLink mode-change directly to ArduPilot SITL (Akul's simulator).
+    Used as primary path for Brake/RTL — does not depend on Blue Team being online.
+    Tries multiple SITL ports sequentially until one responds with a heartbeat.
+    """
+    SITL_PORTS = [14551, 14550, 14556, 5760]
+    for port in SITL_PORTS:
+        conn = None
+        try:
+            conn = mavutil.mavlink_connection(
+                f"udpout:{SITL_IP}:{port}",
+                source_system=255
+            )
+            conn.wait_heartbeat(timeout=2)
+            mode_map = conn.mode_mapping()
+            if action_str == "FORCE_BRAKE":
+                mode_name = "BRAKE"
+            elif action_str == "FORCE_RTL":
+                mode_name = "RTL"
+            else:
+                return False
+
+            if mode_map and mode_name in mode_map:
+                mode_id = mode_map[mode_name]
+                conn.set_mode(mode_id)
+                print(f"[MAVLink Direct] ✅ {mode_name} sent via udpout:{SITL_IP}:{port}")
+                return True
+            else:
+                # Fallback: send DO_SET_MODE command_long
+                mode_id = {"BRAKE": 17, "RTL": 6}.get(mode_name, -1)
+                if mode_id < 0:
+                    continue
+                conn.mav.command_long_send(
+                    conn.target_system, conn.target_component,
+                    mavutil.mavlink.MAV_CMD_DO_SET_MODE,
+                    0,
+                    mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+                    mode_id, 0, 0, 0, 0, 0
+                )
+                print(f"[MAVLink Direct] ✅ {mode_name} (command_long) sent via udpout:{SITL_IP}:{port}")
+                return True
+        except Exception as e:
+            print(f"[MAVLink Direct] ⚠️ Port {port} failed: {e}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    print(f"[MAVLink Direct] ❌ All SITL ports exhausted — could not send {action_str}")
+    return False
+
 def send_secure_command(action_str: str):
     """Sends cryptographically signed command to Blue Team / Flight Controller."""
     try:
@@ -64,90 +119,6 @@ def send_secure_command(action_str: str):
     except Exception as e:
         print(f"[UI Bridge] ❌ Failed to dispatch secure command ({action_str}):", e)
         return False
-
-# ==========================================
-# ACTIVE MAVLINK CONNECTIONS & FAILSAFE
-# ==========================================
-active_mavlink_conns = {}  # port -> conn
-
-def dispatch_mavlink_failsafe(action_str: str) -> bool:
-    """
-    Sends MAVLink commands to ArduCopter SITL to force immediate flight mode change:
-    - FORCE_BRAKE -> COPTER_MODE_BRAKE (17)
-    - FORCE_RTL   -> COPTER_MODE_RTL (6)
-    - FORCE_LAND  -> COPTER_MODE_LAND (9)
-    """
-    import socket
-    if action_str == "FORCE_BRAKE":
-        mode_id = 17
-        mode_name = "BRAKE"
-    elif action_str == "FORCE_RTL":
-        mode_id = 6
-        mode_name = "RTL"
-    elif action_str == "FORCE_LAND":
-        mode_id = 9
-        mode_name = "LAND"
-    else:
-        return False
-
-    success = False
-
-    # 1. Send via all active inbound MAVLink sockets
-    for port, conn in list(active_mavlink_conns.items()):
-        try:
-            target_sys = getattr(conn, 'target_system', 1) or 1
-            target_comp = getattr(conn, 'target_component', 1) or 1
-            conn.mav.command_long_send(
-                target_sys,
-                target_comp,
-                mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-                0,
-                mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-                mode_id,
-                0, 0, 0, 0, 0
-            )
-            conn.mav.set_mode_send(
-                target_sys,
-                mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-                mode_id
-            )
-            print(f"[MAVLink Failsafe] 🚀 Dispatched {mode_name} (mode {mode_id}) via port {port} to sys {target_sys}")
-            success = True
-        except Exception as e:
-            print(f"[MAVLink Failsafe] ⚠️ Failed on port {port}: {e}")
-
-    # 2. Also send directly to the simulator machine (Akul / 100.113.116.76) on common MAVLink ports
-    sim_ip = os.environ.get("SIMULATOR_IP", "100.113.116.76")
-    try:
-        m = mavutil.mavlink.MAVLink(None)
-        cmd1 = m.command_long_encode(
-            1, 1,
-            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-            0,
-            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            mode_id,
-            0, 0, 0, 0, 0
-        ).pack(m)
-        cmd2 = m.set_mode_encode(
-            1,
-            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            mode_id
-        ).pack(m)
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        for target_port in [14550, 14551, 14552, 14554, 14555, 69]:
-            try:
-                sock.sendto(cmd1, (sim_ip, target_port))
-                sock.sendto(cmd2, (sim_ip, target_port))
-                success = True
-            except Exception:
-                pass
-        sock.close()
-        print(f"[MAVLink Failsafe] 🚀 Broadcasted {mode_name} directly to simulator at {sim_ip} on ports [14550, 14551, 14552, 14554, 14555, 69]")
-    except Exception as e:
-        print(f"[MAVLink Failsafe] ⚠️ Error broadcasting to simulator host: {e}")
-
-    return success
 
 # ==========================================
 # TELEMETRY STATE
@@ -190,7 +161,6 @@ def mavlink_listener_worker(port: int, loop: asyncio.AbstractEventLoop):
         conn = mavutil.mavlink_connection(f"udpin:0.0.0.0:{port}")
         print(f"[MAVLink Ingress] ✅ Listening for SITL/MAVProxy telemetry on UDP port {port}...")
         active_mavlink_ports.add(port)
-        active_mavlink_conns[port] = conn
     except Exception as e:
         print(f"[MAVLink Ingress] ⚠️ Note: Port {port} unavailable without elevated permissions ({e})")
         return
@@ -407,21 +377,22 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 payload = json.loads(data)
                 action = payload.get("action")
-                if action in ("FORCE_BRAKE", "FORCE_RTL", "FORCE_LAND"):
-                    mav_ok = dispatch_mavlink_failsafe(action)
-                    sec_ok = send_secure_command(action)
-                    success = mav_ok or sec_ok
-                    if action == "FORCE_BRAKE":
-                        last_known_telemetry["speed_ms"] = 0.0
-                        last_known_telemetry["vx"] = 0.0
-                        last_known_telemetry["vy"] = 0.0
-
+                if action in ("FORCE_BRAKE", "FORCE_RTL"):
+                    # Run the blocking MAVLink send in a thread so we don't stall the event loop
+                    direct_success = await asyncio.get_event_loop().run_in_executor(
+                        None, send_mavlink_direct_command, action
+                    )
+                    # Also notify Blue Team (best-effort, may fail if they're offline)
+                    bt_success = send_secure_command(action)
+                    success = direct_success or bt_success
+                    route = "SITL Direct" if direct_success else ("Blue Team" if bt_success else "FAILED")
                     await websocket.send_json({
                         "command_confirmation": {
                             "action": action,
                             "success": success,
+                            "route": route,
                             "timestamp": time.time(),
-                            "message": "High-stability aerodynamic hover lock engaged." if action == "FORCE_BRAKE" else "Autonomous inertial recall (RTL) engaged."
+                            "message": "Immediate hover-lock command dispatched to flight controller." if action == "FORCE_BRAKE" else "Autonomous return-to-launch command dispatched to flight controller."
                         }
                     })
                 elif action == "SIMULATE_ATTACK":
